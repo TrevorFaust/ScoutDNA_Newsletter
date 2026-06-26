@@ -1,0 +1,11 @@
+"""Table names for shared DraftDNA DB (newsletter_* prefix avoids public.teams collision)."""
+
+TEAMS = "newsletter_teams"
+SOURCES = "newsletter_sources"
+RAW_ITEMS = "newsletter_raw_items"
+STORY_CLUSTERS = "newsletter_story_clusters"
+ISSUES = "newsletter_issues"
+SECTIONS = "newsletter_sections"
+PIPELINE_RUNS = "newsletter_pipeline_runs"
+SUBSCRIBERS = "newsletter_subscribers"
+GLOSSARY = "newsletter_glossary_terms"

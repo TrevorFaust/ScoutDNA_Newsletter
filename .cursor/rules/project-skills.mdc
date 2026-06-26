@@ -1,0 +1,33 @@
+---
+description: Installed agent skills and when to use them for this project
+alwaysApply: true
+---
+
+# Project Skills
+
+Skills live in `.agents/skills/` and are locked in `skills-lock.json`.
+
+## Writing
+
+- **stop-slop** — Edit newsletter copy; remove AI filler and formulaic prose.
+- **newsletter-voice** (this repo’s `.cursor/rules/newsletter-voice.mdc`) — Professional, fan-first tone with grit and heart.
+
+## Design & UI
+
+- **ui-ux-pro-max** — Layout, palettes, typography, components, accessibility, stack patterns (Tailwind, shadcn, Next.js).
+- **frontend-design** — Distinctive visual direction; avoid generic AI aesthetics. Use for initial brand and landing/archive pages.
+
+When both apply: **frontend-design** sets the bold direction; **ui-ux-pro-max** refines UX, spacing, and accessibility.
+
+## React / Next.js (CLI install names)
+
+- **vercel-react-best-practices** — Performance, data fetching, bundle size, RSC (repo folder: `react-best-practices`).
+- **vercel-composition-patterns** — Compound components, fewer boolean props (repo folder: `composition-patterns`).
+
+## Install commands (reference)
+
+```bash
+npx skills add https://github.com/vercel-labs/agent-skills --skill vercel-react-best-practices
+npx skills add https://github.com/vercel-labs/agent-skills --skill vercel-composition-patterns
+npx skills add https://github.com/anthropics/skills --skill frontend-design
+```

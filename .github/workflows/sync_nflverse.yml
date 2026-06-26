@@ -1,0 +1,23 @@
+name: Daily nflverse sync
+
+on:
+  schedule:
+    # 7:00 AM Pacific ≈ 14:00 UTC (PDT)
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r pipeline/requirements.txt
+      - name: Sync rosters, depth charts, coaching
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: cd pipeline && python -m src.run_sync_nflverse

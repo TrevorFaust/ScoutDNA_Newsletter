@@ -1,0 +1,11 @@
+{
+  "pittsburgh-steelers": {
+    "last_season_year": 2025,
+    "record": "10-7",
+    "playoff_result": "Lost AFC Wild Card to Houston Texans (competitive until late)",
+    "prior_playoff_note": "2024 Wild Card loss at Baltimore Ravens (Russell Wilson at QB)",
+    "current_season_note": "2026: Aaron Rodgers at QB on one-year deal; Mike McCarthy head coach",
+    "roster_notes": "Kenny Gainwell released, signed by Buccaneers (not fantasy-relevant unless discussing RB replacement). Rico Dowdle and Kaleb Johnson competing for RB snaps behind starter. Dynasty QB talk: focus on backup QBs Rodgers may mentor for post-2026, not investing in Rodgers himself."
+  },
+  "_readme": "Authoritative past-season facts for compose. Expand per team over time. Do not contradict these in newsletter text."
+}

@@ -1,0 +1,5 @@
+team_slug,source_type,label,url,tier,active,max_per_day
+pittsburgh-steelers,youtube,Steelers Official,https://www.youtube.com/@steelers,1,true,2
+pittsburgh-steelers,podcast,All Steelers Podcast RSS,https://example.com/feed.xml,2,true,1
+pittsburgh-steelers,rss,Beat Reporter RSS,https://example.com/beat/feed,2,true,3
+,broadcast,rss,NFL.com RSS,https://www.espn.com/espn/rss/nfl/news,1,true,10

@@ -1,0 +1,11 @@
+{
+  "name": "scoutdna-all-32",
+  "private": true,
+  "scripts": {
+    "dev": "npm run dev --prefix web",
+    "build": "npm run build --prefix web",
+    "install:web": "npm install --prefix web",
+    "collect": "powershell -File scripts/collect.ps1",
+    "compose": "powershell -File scripts/compose.ps1"
+  }
+}
