@@ -48,8 +48,8 @@ Scheduled GitHub Actions can run collect on a cron; compose is typically batched
 ### 1. Supabase
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. Run `supabase/migrations/001_initial.sql` in the SQL editor.
-3. Copy keys into `.env` (see `.env.example`).
+2. Run migrations — see [supabase/migrations/README.md](./supabase/migrations/README.md) (standalone vs shared DraftDNA DB).
+3. Copy keys into `.env` (see [SETUP_KEYS.md](./SETUP_KEYS.md) and `.env.example`).
 
 ### 2. Python pipeline
 
@@ -99,9 +99,15 @@ npm run dev
 
 `web/.env.local` must include `SUPABASE_SERVICE_ROLE_KEY` to preview drafts on the site.
 
-### 4. Reddit app
+### 4. Reddit (RSS)
 
-Create a "script" app at [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps). Set `REDDIT_*` in `.env`.
+Collect uses public RSS feeds for `r/nfl` and team subreddits. Set a descriptive user agent in `.env`:
+
+```env
+REDDIT_USER_AGENT=ScoutDNA-All32/1.0 (contact: your@email.com)
+```
+
+Optional JSON/OAuth instead of RSS: create a [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps) **script** app and set `REDDIT_*` keys — see [SETUP_KEYS.md](./SETUP_KEYS.md).
 
 ## Repo layout
 
@@ -117,12 +123,8 @@ data/              # Team registry, source seeds
 
 See [docs/YOUTUBE_SETUP.md](./docs/YOUTUBE_SETUP.md) — **yt-dlp** + **Whisper** (optional extras), channel list in `data/youtube_sources.csv`, run `pipeline/youtube.ps1` before compose.
 
-## Twitter / X API (later)
-
-X moved to **pay-per-use credits** (no free tier for new devs). Roughly **~$0.005 per post read**; a daily 32-team digest pulling hundreds of posts can land in **$20–100+/month** depending on volume. Legacy fixed tiers (~$200/mo Basic) may still exist for old accounts. Plan to add X in Phase 2 with a monthly cap.
-
 ## Phase roadmap
 
 - **Phase 1** (now): Reddit + RSS, compose, review UI, publish HTML
 - **Phase 2**: Resend email, Monday weekly job, subscriber preferences
-- **Phase 3**: X API, glossary tooltips, team archive pages, podcast transcripts
+- **Phase 3**: Glossary tooltips, team archive pages, expanded media sources
