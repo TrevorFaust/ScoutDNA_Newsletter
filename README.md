@@ -1,6 +1,43 @@
 # ScoutDNA: All 32
 
-Fantasy-focused daily NFL digest for all 32 teams (ScoutDNA brand), with a Monday weekly rollup.
+**Every team. Every day. One digest worth opening.**
+
+ScoutDNA: All 32 is a daily NFL digest that turns the offseason and in-season noise into a structured, fantasy-aware read — all 32 franchises, one issue, every morning. Reddit threads, beat RSS, YouTube shows, and podcast episodes run through a pipeline that collects, dedupes, and clusters the day’s reporting, then uses automation to help build a cited draft: league-wide opener plus per-team sections grounded in sources. Mondays roll the week into a single recap.
+
+Built for people who follow the league seriously — not hot-take aggregators, but readers who want *what moved*, *what was said*, and *what it means for your roster* without opening twelve tabs.
+
+### What an issue looks like
+
+| Layer | What you get |
+|-------|----------------|
+| **League lens** | National stories — schedule drops, league office news, scandals with traction beyond one fan base |
+| **Team sections (×32)** | Intro, rookie/camp beat, **Activity** (new facts + grounded reads), **Talk** (quotes & rumor context), **Fantasy lens** (skill-position angles only when the news supports them) |
+| **Footnotes** | Superscript citations back to Reddit posts, RSS articles, transcripts — no orphan claims |
+
+Depth charts, draft capital, and curated position battles (who’s actually fighting for WR2) feed the compose step so copy stays tied to real roster context, not generic camp filler.
+
+### How the pipeline runs
+
+```
+Collect → Cluster → Compose → Publish
+   ↑         ↑          ↑
+ Reddit    Dedupe     Draft + citations
+ RSS       by team
+ YouTube
+ Podcasts
+```
+
+1. **Collect** — Pulls a 24-hour window of posts and articles per team (team subreddits, r/nfl, ESPN RSS, optional YouTube transcripts and podcast show notes).
+2. **Compose** — Groups related items and shapes the league opener and each team block from clustered sources, with sourcing and rumor flags built in.
+3. **Publish** — Finished issues ship as HTML on the Next.js site (email via Resend is Phase 2).
+
+Scheduled GitHub Actions can run collect on a cron; compose is typically batched by team or division to keep runs manageable.
+
+### Stack at a glance
+
+- **Python pipeline** — collectors, clustering, compose, Supabase storage
+- **Next.js web** — public issue pages, issue tooling, signup/preferences stubs
+- **Supabase** — teams, raw items, drafts, published issues
 
 **URL slug:** `scoutdna-all-32` (e.g. `/issue/2026-05-19`)
 
