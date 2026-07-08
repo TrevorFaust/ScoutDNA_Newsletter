@@ -1,33 +1,70 @@
-name: Daily collect
+name: Daily pipeline
 
 on:
   schedule:
-    # 8:00 AM Pacific ≈ 15:00 UTC (PDT); adjust for PST if needed
-    - cron: "0 15 * * *"
+    # 1:00 AM Pacific (issue date = yesterday PT). 08:00 UTC = PDT; use 09:00 UTC Nov-Mar (PST).
+    - cron: "0 8 * * *"
   workflow_dispatch:
     inputs:
       issue_date:
-        description: Issue date (YYYY-MM-DD)
+        description: Issue date (YYYY-MM-DD). Default = yesterday Pacific.
         required: false
+      skip_media:
+        description: Skip YouTube/podcasts (Reddit+RSS only)
+        type: boolean
+        default: false
+      skip_compose:
+        description: Skip compose (collect only)
+        type: boolean
+        default: false
 
 jobs:
-  collect:
+  pipeline:
     runs-on: ubuntu-latest
+    timeout-minutes: 480
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: pip install -r pipeline/requirements.txt
-      - name: Run collect
+        run: |
+          pip install -r pipeline/requirements.txt tzdata
+          pip install yt-dlp
+      - name: Resolve issue date
+        id: date
+        run: |
+          if [ -n "${{ github.event.inputs.issue_date }}" ]; then
+            echo "issue_date=${{ github.event.inputs.issue_date }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "issue_date=$(TZ=America/Los_Angeles date -d "yesterday" +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Collect (Reddit + RSS)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
           REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
-          REDDIT_USER_AGENT: DraftDNA-NFL-Newsletter/1.0
+          REDDIT_USER_AGENT: ${{ secrets.REDDIT_USER_AGENT }}
+          NEWSLETTER_TIMEZONE: America/Los_Angeles
         run: |
-          DATE="${{ github.event.inputs.issue_date }}"
-          if [ -z "$DATE" ]; then DATE=$(date +%Y-%m-%d); fi
-          cd pipeline && python -m src.run_collect --date "$DATE"
+          echo "Issue date: ${{ steps.date.outputs.issue_date }}"
+          cd pipeline && python -m src.run_collect --date "${{ steps.date.outputs.issue_date }}"
+      - name: Media batch (YouTube + podcasts)
+        if: github.event.inputs.skip_media != 'true'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NEWSLETTER_TIMEZONE: America/Los_Angeles
+          YOUTUBE_SKIP_WHISPER: "true"
+        run: |
+          cd pipeline && python -m src.run_media_batch --date "${{ steps.date.outputs.issue_date }}" --all-teams --workers 6 --max-videos 2 --max-episodes 2
+      - name: Compose (all 32 teams -> in_review)
+        if: github.event.inputs.skip_compose != 'true'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NEWSLETTER_TIMEZONE: America/Los_Angeles
+        run: |
+          cd pipeline && python -m src.run_compose --date "${{ steps.date.outputs.issue_date }}"
