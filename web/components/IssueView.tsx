@@ -2,9 +2,11 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { IssueAdjacentNav } from "@/components/IssueAdjacentNav";
 import { MarkdownBlock } from "@/components/MarkdownBlock";
 import { ReferencesDropdown } from "@/components/ReferencesDropdown";
 import { RumorSectionActions } from "@/components/RumorSectionActions";
+import { cleanCopy, type AdjacentIssue } from "@/lib/issues";
 import { getDivisionGroups } from "@/lib/teams";
 
 type Section = {
@@ -28,23 +30,29 @@ type Footnote = { n: number; label: string; url: string };
 type Props = {
   title: string;
   status?: string;
+  issueType?: "daily" | "weekly";
   issueDate?: string;
   leagueSection: string | null;
   leagueFootnotes?: Footnote[];
   sections: Section[];
   favoriteTeamSlug?: string | null;
   playerEntries?: import("@/lib/playerRegistry").PlayerLookupEntry[];
+  adjacentPrev?: AdjacentIssue | null;
+  adjacentNext?: AdjacentIssue | null;
 };
 
 export function IssueView({
   title,
   status,
+  issueType = "daily",
   issueDate,
   leagueSection,
   leagueFootnotes = [],
   sections,
   favoriteTeamSlug,
   playerEntries = [],
+  adjacentPrev = null,
+  adjacentNext = null,
 }: Props) {
   const hasContent = sections.some(
     (s) => s.intro_paragraphs || s.activity_markdown || s.talk_markdown
@@ -60,11 +68,32 @@ export function IssueView({
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [favoriteTeamSlug]);
 
+  const editionHref = issueType === "weekly" ? "/weekly" : "/daily";
+  const editionLabel = issueType === "weekly" ? "Weekly" : "Daily";
+
   return (
     <main>
-      <h1>{title}</h1>
-      {status && (
-        <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+      <nav className="breadcrumb" aria-label="Breadcrumb">
+        <Link href="/">Home</Link>
+        <span aria-hidden="true">/</span>
+        <Link href={editionHref}>{editionLabel}</Link>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">Issue</span>
+      </nav>
+
+      <div className="issue-header">
+        <span className={`edition-badge edition-${issueType}`}>{editionLabel} Edition</span>
+        <h1>{cleanCopy(title)}</h1>
+      </div>
+
+      <IssueAdjacentNav
+        prev={adjacentPrev}
+        next={adjacentNext}
+        teamSlug={favoriteTeamSlug}
+      />
+
+      {status && status !== "published" && (
+        <p className="issue-status">
           Status: <strong>{status}</strong>
         </p>
       )}
@@ -208,6 +237,11 @@ export function IssueView({
           })}
         </div>
       ))}
+      <IssueAdjacentNav
+        prev={adjacentPrev}
+        next={adjacentNext}
+        teamSlug={favoriteTeamSlug}
+      />
     </main>
   );
 }

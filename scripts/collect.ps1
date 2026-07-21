@@ -2,7 +2,7 @@
 # Optional: .\scripts\collect.ps1 -Date 2026-05-21 -Team pittsburgh-steelers
 # YouTube (slower): .\scripts\media.ps1 -Team pittsburgh-steelers -MaxVideos 1
 
-param([string]$Date, [string]$Team)
+param([string]$Date, [string]$Team, [switch]$SkipReddit)
 
 $Root = Split-Path $PSScriptRoot -Parent
 $Pipeline = Join-Path $Root "pipeline"
@@ -18,6 +18,7 @@ try {
     $args = @("-m", "src.run_collect")
     if ($Date) { $args += @("--date", $Date) }
     if ($Team) { $args += @("--team", $Team) }
+    if ($SkipReddit) { $args += "--skip-reddit" }
     & $VenvPython @args
 } finally {
     Pop-Location

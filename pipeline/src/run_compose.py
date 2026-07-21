@@ -130,7 +130,7 @@ def main() -> None:
         issue_id = issue["id"]
         sb = get_client()
         sb.table(ISSUES).update(
-            {"title": f"ScoutDNA: All 32 — {issue_date.strftime('%B %d, %Y')}"}
+            {"title": f"ScoutDNA: All 32, {issue_date.strftime('%B %d, %Y')}"}
         ).eq("id", issue_id).execute()
 
         sb_sections = []

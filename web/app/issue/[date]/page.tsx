@@ -1,5 +1,6 @@
 import { IssueView } from "@/components/IssueView";
 import { createServerClient } from "@/lib/supabase";
+import { fetchAdjacentIssues } from "@/lib/issues";
 import {
   fetchPlayerPositionLookup,
   serializePlayerLookup,
@@ -41,10 +42,16 @@ export default async function IssuePage({ params, searchParams }: Props) {
   const playerLookup = await fetchPlayerPositionLookup(supabase);
   const playerEntries = serializePlayerLookup(playerLookup);
 
+  const adjacent = await fetchAdjacentIssues(
+    issue.issue_date,
+    issue.issue_type as "daily" | "weekly"
+  );
+
   return (
     <IssueView
       title={issue.title}
       status={issue.status}
+      issueType={issue.issue_type as "daily" | "weekly"}
       issueDate={date}
       leagueSection={issue.league_section}
       leagueFootnotes={
@@ -55,6 +62,8 @@ export default async function IssuePage({ params, searchParams }: Props) {
       ) as Parameters<typeof IssueView>[0]["sections"]}
       favoriteTeamSlug={favorite}
       playerEntries={playerEntries}
+      adjacentPrev={adjacent.prev}
+      adjacentNext={adjacent.next}
     />
   );
 }

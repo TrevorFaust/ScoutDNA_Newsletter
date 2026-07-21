@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createServerClient } from "@/lib/supabase";
+import { cleanCopy } from "@/lib/issues";
 import { RumorReviewPanel } from "@/components/RumorReviewPanel";
 
 type Props = { params: Promise<{ date: string }> };
@@ -50,12 +51,14 @@ export default async function ReviewPage({ params }: Props) {
 
   return (
     <main>
-      <h1>Review — {issue.title}</h1>
+      <h1>Review: {cleanCopy(issue.title)}</h1>
       <p>
         Status: <strong>{issue.status}</strong>
       </p>
       <p>
         <Link href={`/issue/${date}`}>Preview issue</Link>
+        {" · "}
+        <Link href="/admin/camp-signals">Camp signals</Link>
       </p>
       <form action={`/api/publish`} method="post" style={{ margin: "1rem 0" }}>
         <input type="hidden" name="issueId" value={issue.id} />
@@ -97,7 +100,7 @@ export default async function ReviewPage({ params }: Props) {
         })}
       </ul>
       {flagged.length === 0 && (
-        <p style={{ color: "var(--muted)" }}>No flags — still skim injuries before publishing.</p>
+        <p style={{ color: "var(--muted)" }}>No flags. Still skim injuries before publishing.</p>
       )}
     </main>
   );

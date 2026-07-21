@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { extractRumorFromTalk } from "@/lib/rumorTalk";
 
 type Props = {
   sectionId: string;
@@ -26,6 +27,7 @@ export function RumorSectionActions({
   const hasRumor = (flags ?? []).some(
     (f) => f === "review:rumor" || (f.includes("rumor") && f.startsWith("review:"))
   );
+  const rumorText = extractRumorFromTalk(talkMarkdown);
 
   if (!editable || !hasRumor) {
     return null;
@@ -106,6 +108,32 @@ export function RumorSectionActions({
       <div style={{ fontSize: "0.85rem", marginBottom: "0.5rem" }}>
         Rumor flagged for review
       </div>
+      {rumorText ? (
+        <blockquote
+          style={{
+            margin: "0 0 0.75rem",
+            padding: "0.65rem 0.85rem",
+            borderLeft: "3px solid #c9a227",
+            background: "var(--bg)",
+            borderRadius: "0 6px 6px 0",
+            whiteSpace: "pre-wrap",
+            fontSize: "0.95rem",
+            lineHeight: 1.45,
+          }}
+        >
+          {rumorText}
+        </blockquote>
+      ) : (
+        <p
+          style={{
+            margin: "0 0 0.75rem",
+            fontSize: "0.85rem",
+            color: "var(--muted)",
+          }}
+        >
+          No rumor text found in Talk for this team.
+        </p>
+      )}
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
         <button
           type="button"
@@ -135,7 +163,7 @@ export function RumorSectionActions({
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
             rows={3}
-            placeholder="e.g. Remove the WR depth rumor — not confirmed. Or: Soften to say podcast speculation only."
+            placeholder="e.g. Remove the WR depth rumor; not confirmed. Or: Soften to say podcast speculation only."
             style={{
               width: "100%",
               padding: "0.5rem",

@@ -128,6 +128,243 @@ Rules:
 """
 
 
+WEEKLY_STYLE_ADDENDUM = """
+Weekly edition rules (override daily "last 24h" where they conflict):
+- This is a WEEK IN REVIEW for Mon–Sun Pacific. Synthesize the week's arc; do NOT write day-by-day chronology.
+- topic_clusters include day_count (how many distinct days the story appeared). Higher day_count = more prominent — lead with those topics in intro and Activity.
+- Merge duplicate stories into ONE narrative beat. Never restate the same injury, quote, or rumor on separate days.
+- Target length: similar to a daily section (1-2 intro paragraphs, organic bullets). Quiet week = shorter is OK; never pad with filler or generic camp boilerplate.
+- Every team gets a section. Use all relevant topic_clusters. If the week was quiet, say what little moved — camp context, one quote, a minor roster note — only from inputs.
+- footnotes: reuse source_urls from topic_clusters when citing; up to 6 distinct sources.
+- fantasy_markdown: week-level fantasy takeaways only; skip players with no weekly news.
+"""
+
+
+def _build_team_weekly_prompt(
+    team: Team,
+    weekly_input: dict,
+    issue_date: date,
+    prior_context: str = "",
+) -> str:
+    context = json.dumps(weekly_input, indent=2)
+    season = load_season_context(team.slug)
+    season_block = (
+        json.dumps(season, indent=2)
+        if season
+        else "None — only cite past games if in input stories; do not guess opponents."
+    )
+    db_context = load_compose_context(team)
+    db_block = db_context if db_context else "None — use input stories only for player positions."
+    from .weekly_window import week_label
+
+    return f"""Write the {team.name} section for ScoutDNA: All 32 — WEEK IN REVIEW edition.
+Issue date: {issue_date} (Monday weekly cover). Week covered: {week_label(issue_date)} (Mon–Sun PT, prior calendar week).
+
+Team tier: {team.narrative_tier}. Audience: dynasty and redraft fantasy players. Concise, grounded, light personality OK.
+
+{db_block}
+
+Season context (authoritative for past seasons and playoff results):
+{season_block}
+
+Weekly input (JSON):
+- topic_clusters: this team's stories collected across the full Mon-Sun week, deduped by topic. day_count = number of distinct days that story was reported this week — higher day_count means a more prominent, recurring beat; lead with those.
+
+{context}
+
+{prior_context}
+
+{STYLE_RULES}
+
+{WEEKLY_STYLE_ADDENDUM}
+
+Return a single JSON object only (no markdown fences, no preamble, no duplicate JSON blocks):
+{{
+  "intro_paragraphs": "1-2 paragraphs — week's biggest beats; bold names; superscript citations",
+  "rookie_paragraph": "skill rookies / OL / camp darlings with weekly news; else empty string",
+  "activity_markdown": "markdown under ### Activity — merged week storylines, not daily repeats",
+  "talk_markdown": "markdown under ### Talk — quotes/rumors that defined the week",
+  "fantasy_markdown": "markdown under ### Fantasy lens — week-level bullets for players with news",
+  "footnotes": [{{"n": 1, "label": "\\"Quote or summary.\\" — Outlet", "url": "https://..."}}],
+  "tags": ["Fantasy", "Camp", "Weekly"],
+  "flags": ["review:rumor"]
+}}
+
+Rules:
+- Organic bullet count; never invent filler.
+- If topic_clusters is sparse, write the shortest honest section from whatever exists.
+- is_empty true ONLY if absolutely no usable input exists (rare).
+"""
+
+
+def _build_league_weekly_prompt(
+    league_input: dict, issue_date: date, prior_context: str = ""
+) -> str:
+    context = json.dumps(league_input, indent=2)
+    from .weekly_window import week_label
+
+    return f"""Write the league-wide opening for ScoutDNA: All 32 — WEEK IN REVIEW ({issue_date}).
+Week covered: {week_label(issue_date)} (Mon–Sun PT).
+
+Purpose: national stories that dominated the NFL week — scandals, league office, schedule, major franchise arcs with national traction.
+Use topic_clusters day_count to prioritize recurring league-wide themes. Merge duplicates; do not list daily repeats.
+
+Input (JSON):
+{context}
+
+{prior_context}
+
+{STYLE_RULES}
+
+{WEEKLY_STYLE_ADDENDUM}
+
+Return a single JSON object only (no markdown fences, no preamble, no duplicate JSON blocks):
+{{
+  "body": "2-5 sentences markdown — week's league headlines; superscript citations",
+  "footnotes": [{{"n": 1, "label": "\\"Summary.\\" — Outlet", "url": "https://..."}}]
+}}
+
+Rules:
+- If inputs sparse, one sentence on offseason league rhythm; footnotes [].
+- Max 5 footnotes.
+"""
+
+
+def compose_team_section_weekly(
+    client: anthropic.Anthropic,
+    team: Team,
+    weekly_input: dict,
+    issue_date: date,
+    *,
+    prior_context: str = "",
+) -> dict:
+    if not weekly_input.get("topic_clusters"):
+        return {
+            "intro_paragraphs": None,
+            "rookie_paragraph": "",
+            "activity_markdown": "_No collected items for this team this week._",
+            "talk_markdown": "",
+            "fantasy_markdown": "",
+            "footnotes": [],
+            "tags": ["Weekly"],
+            "flags": ["empty:weekly-input"],
+            "is_empty": True,
+            "empty_reason": "No raw items collected for this team in the week window.",
+        }
+
+    msg = client.messages.create(
+        model=MODEL,
+        max_tokens=TEAM_MAX_TOKENS,
+        messages=[
+            {
+                "role": "user",
+                "content": _build_team_weekly_prompt(
+                    team, weekly_input, issue_date, prior_context
+                ),
+            }
+        ],
+    )
+    text = msg.content[0].text
+    try:
+        data = parse_compose_json(text)
+    except json.JSONDecodeError:
+        data = {
+            "intro_paragraphs": None,
+            "rookie_paragraph": "",
+            "activity_markdown": "",
+            "talk_markdown": "",
+            "fantasy_markdown": "",
+            "footnotes": [],
+            "tags": ["needs-review", "Weekly"],
+            "flags": ["parse:error"],
+            "is_empty": False,
+            "empty_reason": "Compose response was not valid JSON — re-run weekly compose.",
+        }
+    data.setdefault("is_empty", False)
+    data.setdefault("flags", [])
+    tags = list(data.get("tags") or [])
+    if "Weekly" not in tags:
+        tags.append("Weekly")
+    data["tags"] = tags
+    return data
+
+
+def compose_league_section_weekly(
+    client: anthropic.Anthropic,
+    league_input: dict,
+    issue_date: date,
+    *,
+    prior_context: str = "",
+) -> dict:
+    empty_body = (
+        "No league-wide headlines dominated the week. Team sections below recap "
+        "camp, depth charts, injuries, and roster moves for all 32 clubs."
+    )
+    if not league_input.get("topic_clusters"):
+        return {"body": empty_body, "footnotes": []}
+    msg = client.messages.create(
+        model=MODEL,
+        max_tokens=800,
+        messages=[
+            {
+                "role": "user",
+                "content": _build_league_weekly_prompt(
+                    league_input, issue_date, prior_context
+                ),
+            }
+        ],
+    )
+    text = msg.content[0].text
+    try:
+        data = parse_compose_json(text)
+        return {
+            "body": (data.get("body") or empty_body).strip(),
+            "footnotes": data.get("footnotes") or [],
+        }
+    except json.JSONDecodeError:
+        return {"body": text.strip(), "footnotes": []}
+
+
+def compose_issue_weekly(
+    teams: list[Team],
+    weekly_issue_date: date,
+    slug_to_id: dict[str, str],
+    *,
+    prior_context: str = "",
+) -> tuple[dict, list[dict]]:
+    from .weekly_input import build_league_weekly_input, build_team_weekly_input
+
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY required for compose")
+    client = anthropic.Anthropic(api_key=api_key)
+
+    league_input = build_league_weekly_input(weekly_issue_date, slug_to_id)
+    league = compose_league_section_weekly(
+        client, league_input, weekly_issue_date, prior_context=prior_context
+    )
+
+    sections: list[dict] = []
+    sort = 0
+    for _div, div_teams in division_groups(teams).items():
+        for team in div_teams:
+            sort += 1
+            team_input = build_team_weekly_input(
+                team, weekly_issue_date, teams, slug_to_id
+            )
+            section = compose_team_section_weekly(
+                client,
+                team,
+                team_input,
+                weekly_issue_date,
+                prior_context=prior_context,
+            )
+            section["sort_order"] = sort
+            section["team_slug"] = team.slug
+            sections.append(section)
+    return league, sections
+
+
 def compose_team_section(
     client: anthropic.Anthropic,
     team: Team,

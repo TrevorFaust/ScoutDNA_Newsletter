@@ -38,8 +38,6 @@ export function MarkdownBlock({ content, playerEntries = [], contextText }: Prop
 
   const components = useMemo(() => {
     if (!matcher) return undefined;
-    // Each paragraph / bullet gets its own session so a player chips once per
-    // block (first mention) and renders plain afterwards.
     return {
       p: ({ children }: { children?: React.ReactNode }) => (
         <p>{renderChildrenWithPlayerChips(children, matcher, createChipSession())}</p>

@@ -6,7 +6,9 @@
 
 param(
     [string]$Date,
-    [string]$Team
+    [string]$Team,
+    [switch]$Weekly,
+    [switch]$Force
 )
 
 $Root = Split-Path $PSScriptRoot -Parent
@@ -20,9 +22,15 @@ if (-not (Test-Path $VenvPython)) {
 
 Push-Location $Pipeline
 try {
-    $pyArgs = @("-m", "src.run_compose")
-    if ($Date) { $pyArgs += @("--date", $Date) }
-    if ($Team) { $pyArgs += @("--team", $Team) }
+    if ($Weekly) {
+        $pyArgs = @("-m", "src.run_compose_weekly")
+        if ($Date) { $pyArgs += @("--date", $Date) }
+        if ($Force) { $pyArgs += @("--force") }
+    } else {
+        $pyArgs = @("-m", "src.run_compose")
+        if ($Date) { $pyArgs += @("--date", $Date) }
+        if ($Team) { $pyArgs += @("--team", $Team) }
+    }
     & $VenvPython @pyArgs
 } finally {
     Pop-Location

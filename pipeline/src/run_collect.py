@@ -29,6 +29,11 @@ def main() -> None:
         type=str,
         help="Collect only this team slug (e.g. pittsburgh-steelers); skips other subs to reduce Reddit rate limits",
     )
+    parser.add_argument(
+        "--skip-reddit",
+        action="store_true",
+        help="Skip Reddit (RSS + ESPN only). Also set REDDIT_SKIP=1 in .env.",
+    )
     args = parser.parse_args()
 
     issue_date = date.fromisoformat(args.date) if args.date else default_issue_date()
@@ -55,15 +60,20 @@ def main() -> None:
         print("No teams in DB — run Supabase migrations + seed first.")
         return
 
+    skip_reddit = args.skip_reddit or os.getenv("REDDIT_SKIP", "").lower() in ("1", "true", "yes")
+
     log_pipeline_run("collect", issue_date, "started")
     items: list[dict] = []
 
-    try:
-        reddit_items = collect_reddit(teams, content_date)
-        items.extend(reddit_items)
-    except Exception as e:
-        log_pipeline_run("collect", issue_date, "partial", error_message=f"reddit: {e}")
-        print(f"Reddit failed: {e}")
+    if skip_reddit:
+        print("Reddit skipped (RSS + media only for this run).")
+    else:
+        try:
+            reddit_items = collect_reddit(teams, content_date)
+            items.extend(reddit_items)
+        except Exception as e:
+            log_pipeline_run("collect", issue_date, "partial", error_message=f"reddit: {e}")
+            print(f"Reddit failed: {e}")
 
     try:
         rss_items = collect_rss(teams, content_date)

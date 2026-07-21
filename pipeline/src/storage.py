@@ -121,14 +121,132 @@ def fetch_raw_items_for_date(content_date: date) -> list[dict]:
     return resp.data or []
 
 
-def ensure_issue(content_date: date, issue_type: str = "daily") -> dict:
+def fetch_raw_items_for_range(content_start: date, content_end: date) -> list[dict]:
     sb = get_client()
-    slug = content_date.isoformat()
-    title = f"ScoutDNA: All 32 — {content_date.strftime('%B %d, %Y')}"
+    resp = (
+        sb.table(RAW_ITEMS)
+        .select("*")
+        .gte("content_date", content_start.isoformat())
+        .lte("content_date", content_end.isoformat())
+        .execute()
+    )
+    return resp.data or []
+
+
+def _issue_slug(issue_date: date, issue_type: str) -> str:
+    if issue_type == "weekly":
+        return f"{issue_date.isoformat()}-weekly"
+    return issue_date.isoformat()
+
+
+def _issue_title(issue_date: date, issue_type: str) -> str:
+    if issue_type == "weekly":
+        from .weekly_window import week_label
+
+        return f"ScoutDNA: All 32, Week in Review ({week_label(issue_date)})"
+    return f"ScoutDNA: All 32, {issue_date.strftime('%B %d, %Y')}"
+
+
+def fetch_daily_issues_with_sections(issue_dates: list[date]) -> dict[str, dict]:
+    """Map issue_date ISO -> { issue row fields, sections: { team_slug -> section } }."""
+    if not issue_dates:
+        return {}
+    sb = get_client()
+    iso_dates = [d.isoformat() for d in issue_dates]
+    issues_resp = (
+        sb.table(ISSUES)
+        .select("id, issue_date, slug, league_section, league_footnotes, status")
+        .eq("issue_type", "daily")
+        .in_("issue_date", iso_dates)
+        .execute()
+    )
+    issues = issues_resp.data or []
+    if not issues:
+        return {}
+
+    issue_ids = [i["id"] for i in issues]
+    teams_resp = sb.table(TEAMS).select("id, slug").execute()
+    id_to_slug = {r["id"]: r["slug"] for r in (teams_resp.data or [])}
+
+    sections_resp = (
+        sb.table(SECTIONS)
+        .select(
+            "issue_id, team_id, intro_paragraphs, rookie_paragraph, "
+            "activity_markdown, talk_markdown, fantasy_markdown, footnotes, "
+            "tags, flags, is_empty, empty_reason"
+        )
+        .in_("issue_id", issue_ids)
+        .execute()
+    )
+
+    sections_by_issue: dict[str, dict[str, dict]] = {i["id"]: {} for i in issues}
+    for sec in sections_resp.data or []:
+        slug = id_to_slug.get(sec.get("team_id"))
+        if slug:
+            sections_by_issue[sec["issue_id"]][slug] = sec
+
+    out: dict[str, dict] = {}
+    for issue in issues:
+        iso = issue["issue_date"]
+        out[iso] = {
+            **issue,
+            "sections": sections_by_issue.get(issue["id"], {}),
+        }
+    return out
+
+
+def fetch_prior_weekly_context(weekly_issue_date: date, *, max_snippets: int = 6) -> str:
+    """Prior Monday weekly edition — avoid repeating last week's recap themes."""
+    prev_monday = weekly_issue_date - timedelta(days=7)
+    prev_slug = _issue_slug(prev_monday, "weekly")
+    sb = get_client()
+    prev = (
+        sb.table(ISSUES)
+        .select("id, league_section")
+        .eq("slug", prev_slug)
+        .eq("issue_type", "weekly")
+        .limit(1)
+        .execute()
+    )
+    if not prev.data:
+        return ""
+    row = prev.data[0]
+    parts: list[str] = []
+    league = row.get("league_section") or ""
+    if league.strip():
+        parts.append(f"League: {league[:500]}")
+    secs = (
+        sb.table(SECTIONS)
+        .select("intro_paragraphs")
+        .eq("issue_id", row["id"])
+        .order("sort_order")
+        .limit(12)
+        .execute()
+    )
+    for sec in secs.data or []:
+        text = (sec.get("intro_paragraphs") or "").strip()
+        if text and len(text) > 40:
+            parts.append(text[:280])
+        if len(parts) >= max_snippets:
+            break
+    if not parts:
+        return ""
+    joined = "\n---\n".join(parts[:max_snippets])
+    return (
+        "Last week's recap already covered the following. "
+        "Do NOT repeat unless daily inputs show a clear NEW development:\n"
+        f"{joined}"
+    )
+
+
+def ensure_issue(issue_date: date, issue_type: str = "daily") -> dict:
+    sb = get_client()
+    slug = _issue_slug(issue_date, issue_type)
+    title = _issue_title(issue_date, issue_type)
     existing = (
         sb.table(ISSUES)
         .select("*")
-        .eq("issue_date", content_date.isoformat())
+        .eq("issue_date", issue_date.isoformat())
         .eq("issue_type", issue_type)
         .limit(1)
         .execute()
@@ -139,7 +257,7 @@ def ensure_issue(content_date: date, issue_type: str = "daily") -> dict:
         sb.table(ISSUES)
         .insert(
             {
-                "issue_date": content_date.isoformat(),
+                "issue_date": issue_date.isoformat(),
                 "issue_type": issue_type,
                 "slug": slug,
                 "title": title,
@@ -152,8 +270,20 @@ def ensure_issue(content_date: date, issue_type: str = "daily") -> dict:
 
 
 def mark_issue_collected(issue_date: date, issue_type: str = "daily") -> None:
-    """After run_collect: issue exists but has no written sections yet."""
+    """After run_collect: mark collected unless already in review or published."""
     sb = get_client()
+    existing = (
+        sb.table(ISSUES)
+        .select("status")
+        .eq("issue_date", issue_date.isoformat())
+        .eq("issue_type", issue_type)
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        status = existing.data[0].get("status")
+        if status in ("in_review", "published"):
+            return
     sb.table(ISSUES).update({"status": "collected"}).eq(
         "issue_date", issue_date.isoformat()
     ).eq("issue_type", issue_type).execute()

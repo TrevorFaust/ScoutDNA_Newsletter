@@ -49,6 +49,7 @@ def cluster_items(items: list[dict], teams: list[Team]) -> list[dict]:
             best = min(group, key=lambda x: x.get("source_tier", 3))
             source_urls = list({g["url"] for g in group if g.get("url")})
             needs_review = any((g.get("metadata") or {}).get("needs_review") for g in group)
+            content_dates = sorted({g["content_date"] for g in group if g.get("content_date")})
             clusters.append(
                 {
                     "team_slug": slug,
@@ -60,6 +61,9 @@ def cluster_items(items: list[dict], teams: list[Team]) -> list[dict]:
                     "tags": list({t for g in group for t in g.get("tags", [])}),
                     "needs_review": needs_review,
                     "raw_titles": [g.get("title") for g in group][:6],
+                    # Distinct content_date values in the group — lets multi-day callers
+                    # (e.g. weekly compose) rank a story by how many days it was reported.
+                    "content_dates": content_dates,
                 }
             )
     return clusters

@@ -1,8 +1,8 @@
 # ScoutDNA: All 32
 
-**Every team. Every day. One digest worth opening.**
+**Every team. Every day of collecting. One digest a week worth opening.**
 
-ScoutDNA: All 32 is a daily NFL digest that turns the offseason and in-season noise into a structured, fantasy-aware read — all 32 franchises, one issue, every morning. Reddit threads, beat RSS, YouTube shows, and podcast episodes run through a pipeline that collects, dedupes, and clusters the day’s reporting, then uses automation to help build a cited draft: league-wide opener plus per-team sections grounded in sources. Mondays roll the week into a single recap.
+ScoutDNA: All 32 is a weekly NFL digest that turns the offseason and in-season noise into a structured, fantasy-aware read — all 32 franchises, one issue, every Monday. Reddit threads, beat RSS, YouTube shows, and podcast episodes are collected and clustered every single day so nothing is missed, but the LLM-composed draft — the league-wide opener plus per-team sections grounded in sources — only runs once a week, rolling the prior Monday–Sunday into a single Monday recap. A one-off daily edition can still be composed on demand for any date.
 
 Built for people who follow the league seriously — not hot-take aggregators, but readers who want *what moved*, *what was said*, and *what it means for your roster* without opening twelve tabs.
 
@@ -27,11 +27,11 @@ Collect → Cluster → Compose → Publish
  Podcasts
 ```
 
-1. **Collect** — Pulls a 24-hour window of posts and articles per team (team subreddits, r/nfl, ESPN RSS, optional YouTube transcripts and podcast show notes).
-2. **Compose** — Groups related items and shapes the league opener and each team block from clustered sources, with sourcing and rumor flags built in.
+1. **Collect** — Pulls a 24-hour window of posts and articles per team (team subreddits, r/nfl, ESPN RSS, optional YouTube transcripts and podcast show notes). Runs every day, all year.
+2. **Compose** — Groups related items and shapes the league opener and each team block from clustered sources, with sourcing and rumor flags built in. Runs once a week (Monday, rolling up the prior Mon–Sun) to keep Anthropic API spend low — this is the only step that calls Claude for a full 32-team draft.
 3. **Publish** — Finished issues ship as HTML on the Next.js site (email via Resend is Phase 2).
 
-Scheduled GitHub Actions can run collect on a cron; compose is typically batched by team or division to keep runs manageable.
+Scheduled GitHub Actions (and/or a local Windows Task Scheduler job) run collect + media every day; compose only fires on Monday unless explicitly overridden (see below).
 
 ### Stack at a glance
 
@@ -108,6 +108,30 @@ REDDIT_USER_AGENT=ScoutDNA-All32/1.0 (contact: your@email.com)
 ```
 
 Optional JSON/OAuth instead of RSS: create a [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps) **script** app and set `REDDIT_*` keys — see [SETUP_KEYS.md](./SETUP_KEYS.md).
+
+### 5. Daily pipeline (automatic)
+
+Each morning the job **collects** and **ingests media** — every day, all year, so no reporting is missed. It only **composes** a draft on **Mondays** (the weekly recap of the prior Mon–Sun); other days just store raw items. The Monday issue lands in **`in_review`** so you only approve and publish.
+
+**Timing:** 1:00 AM Pacific the day after the collection date. Example: June 30 at 1am → collects issue date `2026-06-29`. On a Monday morning, that same run also composes the weekly recap → review at `/admin/review/2026-06-29-weekly`. Collect runs first; compose (Monday only) starts as soon as ingest finishes.
+
+**Windows Task Scheduler (this PC):**
+
+```powershell
+cd "path\to\nfl_newsletter"
+.\scripts\register_collect_task.ps1
+
+# Test once:
+Start-ScheduledTask -TaskName "ScoutDNA-daily-collect"
+```
+
+Sources each run: **Reddit**, **ESPN RSS**, **YouTube** (all 32), **podcasts**, camp signal extraction — then **weekly compose, Mondays only**. Collect-only (never compose): `register_collect_task.ps1 -SkipCompose`.
+
+Want a one-off **daily** edition on a non-Monday (e.g. a big news day)? Run manually: `.\scripts\daily_collect.ps1 -DailyCompose`, or just `.\scripts\compose.ps1 -Date 2026-06-30` against an already-collected date.
+
+Logs: `logs/daily_collect_YYYY-MM-DD.log`. Manual run: `.\scripts\daily_collect.ps1`.
+
+**GitHub Actions** backup (when PC is off): `.github/workflows/collect.yml` — collects daily, extracts camp signals + refreshes the battle proposal queue daily, composes weekly (Monday only) by default. Pass `force_daily_compose: true` on a manual `workflow_dispatch` run to get a full daily edition on any date. Secrets: `SUPABASE_*`, `REDDIT_USER_AGENT`, `ANTHROPIC_API_KEY`.
 
 ## Repo layout
 

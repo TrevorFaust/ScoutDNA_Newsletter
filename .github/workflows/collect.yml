@@ -14,7 +14,11 @@ on:
         type: boolean
         default: false
       skip_compose:
-        description: Skip compose (collect only)
+        description: Skip compose entirely (collect only)
+        type: boolean
+        default: false
+      force_daily_compose:
+        description: Force a full daily edition (all 32 teams) even though it's not Monday
         type: boolean
         default: false
 
@@ -31,13 +35,29 @@ jobs:
         run: |
           pip install -r pipeline/requirements.txt tzdata
           pip install yt-dlp
-      - name: Resolve issue date
-        id: date
+      - name: Resolve compose mode (Monday = weekly, otherwise none unless forced)
+        id: mode
         run: |
           if [ -n "${{ github.event.inputs.issue_date }}" ]; then
-            echo "issue_date=${{ github.event.inputs.issue_date }}" >> "$GITHUB_OUTPUT"
+            ISSUE="${{ github.event.inputs.issue_date }}"
+            DOW=$(TZ=America/Los_Angeles date -d "$ISSUE" +%u)
           else
-            echo "issue_date=$(TZ=America/Los_Angeles date -d "yesterday" +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+            DOW=$(TZ=America/Los_Angeles date +%u)
+            ISSUE=$(TZ=America/Los_Angeles date -d "yesterday" +%Y-%m-%d)
+          fi
+          FORCE_DAILY="${{ github.event.inputs.force_daily_compose }}"
+          if [ "$FORCE_DAILY" = "true" ]; then
+            echo "issue_date=$ISSUE" >> "$GITHUB_OUTPUT"
+            echo "compose=daily" >> "$GITHUB_OUTPUT"
+          elif [ "$DOW" = "1" ]; then
+            if [ -z "${{ github.event.inputs.issue_date }}" ]; then
+              ISSUE=$(TZ=America/Los_Angeles date +%Y-%m-%d)
+            fi
+            echo "issue_date=$ISSUE" >> "$GITHUB_OUTPUT"
+            echo "compose=weekly" >> "$GITHUB_OUTPUT"
+          else
+            echo "issue_date=$ISSUE" >> "$GITHUB_OUTPUT"
+            echo "compose=none" >> "$GITHUB_OUTPUT"
           fi
       - name: Collect (Reddit + RSS)
         env:
@@ -48,8 +68,8 @@ jobs:
           REDDIT_USER_AGENT: ${{ secrets.REDDIT_USER_AGENT }}
           NEWSLETTER_TIMEZONE: America/Los_Angeles
         run: |
-          echo "Issue date: ${{ steps.date.outputs.issue_date }}"
-          cd pipeline && python -m src.run_collect --date "${{ steps.date.outputs.issue_date }}"
+          echo "Issue date: ${{ steps.mode.outputs.issue_date }} (compose=${{ steps.mode.outputs.compose }})"
+          cd pipeline && python -m src.run_collect --date "${{ steps.mode.outputs.issue_date }}"
       - name: Media batch (YouTube + podcasts)
         if: github.event.inputs.skip_media != 'true'
         env:
@@ -58,13 +78,30 @@ jobs:
           NEWSLETTER_TIMEZONE: America/Los_Angeles
           YOUTUBE_SKIP_WHISPER: "true"
         run: |
-          cd pipeline && python -m src.run_media_batch --date "${{ steps.date.outputs.issue_date }}" --all-teams --workers 6 --max-videos 2 --max-episodes 2
-      - name: Compose (all 32 teams -> in_review)
-        if: github.event.inputs.skip_compose != 'true'
+          cd pipeline && python -m src.run_media_batch --date "${{ steps.mode.outputs.issue_date }}" --all-teams --workers 6 --max-videos 2 --max-episodes 2
+      - name: Camp signals (extract + aggregate + propose)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           NEWSLETTER_TIMEZONE: America/Los_Angeles
         run: |
-          cd pipeline && python -m src.run_compose --date "${{ steps.date.outputs.issue_date }}"
+          cd pipeline && python -m src.run_extract_camp_signals --date "${{ steps.mode.outputs.issue_date }}"
+      - name: Compose weekly (Monday week in review)
+        if: github.event.inputs.skip_compose != 'true' && steps.mode.outputs.compose == 'weekly'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NEWSLETTER_TIMEZONE: America/Los_Angeles
+        run: |
+          cd pipeline && python -m src.run_compose_weekly --date "${{ steps.mode.outputs.issue_date }}"
+      - name: Compose daily (all 32 teams -> in_review)
+        if: github.event.inputs.skip_compose != 'true' && steps.mode.outputs.compose == 'daily'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NEWSLETTER_TIMEZONE: America/Los_Angeles
+        run: |
+          cd pipeline && python -m src.run_compose --date "${{ steps.mode.outputs.issue_date }}"

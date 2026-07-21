@@ -78,7 +78,7 @@ def extract_league_feed_items(items: list[dict]) -> list[dict]:
     return selected
 
 
-def cluster_league_feed(items: list[dict]) -> list[dict]:
+def cluster_league_feed(items: list[dict], limit: int = 10) -> list[dict]:
     """Dedupe league feed items without assigning to a team."""
     if not items:
         return []
@@ -102,12 +102,14 @@ def cluster_league_feed(items: list[dict]) -> list[dict]:
                 group.append(other)
                 used.add(j)
         best = min(group, key=lambda x: x.get("source_tier", 3))
+        content_dates = sorted({g["content_date"] for g in group if g.get("content_date")})
         clusters.append(
             {
                 "canonical_title": best.get("title"),
                 "summary_seed": best.get("body") or best.get("title"),
                 "source_urls": list({g["url"] for g in group})[:3],
                 "tags": list({t for g in group for t in g.get("tags", [])}),
+                "content_dates": content_dates,
             }
         )
-    return clusters[:10]
+    return clusters[:limit]

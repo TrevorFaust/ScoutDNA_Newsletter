@@ -32,7 +32,7 @@ export default function SignupPage() {
         <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
         <label>Favorite team (optional)</label>
         <select value={team} onChange={(e) => setTeam(e.target.value)}>
-          <option value="">— Top of newsletter —</option>
+          <option value="">Top of newsletter</option>
           {(teamsData as { slug: string; name: string }[]).map((t) => (
             <option key={t.slug} value={t.slug}>
               {t.name}
