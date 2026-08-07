@@ -27,7 +27,7 @@ from .camp_signals_common import (
 )
 from .camp_storage import (
     expire_proposal,
-    fetch_pending_proposals,
+    fetch_open_proposals,
     fetch_position_battles,
     fetch_signals_in_window,
     fetch_slot_scores,
@@ -260,7 +260,9 @@ def propose_battle_changes(
     battles = fetch_position_battles(season=season, team_abbr=team_abbr)
     scores = fetch_slot_scores(season=season, window_days=window_days, team_abbr=team_abbr)
     signals = fetch_signals_in_window(window_start, window_end, team_abbr=team_abbr)
-    pending = fetch_pending_proposals(season=season, team_abbr=team_abbr)
+    # Include snoozed so we refresh evidence in place instead of inserting a
+    # second pending row that later blocks wake_snoozed_proposals.
+    open_proposals = fetch_open_proposals(season=season, team_abbr=team_abbr)
 
     scores_by_slot: dict[tuple[str, str], list[dict]] = {}
     for s in scores:
@@ -270,11 +272,26 @@ def propose_battle_changes(
     for s in signals:
         signals_by_slot.setdefault((s["team_abbr"], s["slot"]), []).append(s)
 
-    pending_by_key: dict[tuple[str, str, str, str], dict] = {
-        (p["team_abbr"], p["position"], p["slot"], p["proposal_type"]): p for p in pending
-    }
+    pending_by_key: dict[tuple[str, str, str, str], dict] = {}
+    for p in open_proposals:
+        key = (p["team_abbr"], p["position"], p["slot"], p["proposal_type"])
+        existing = pending_by_key.get(key)
+        # Prefer pending over snoozed; among ties keep the newest.
+        if existing is None or (
+            existing.get("status") == "snoozed" and p.get("status") == "pending"
+        ) or (
+            existing.get("status") == p.get("status")
+            and (p.get("created_at") or "") > (existing.get("created_at") or "")
+        ):
+            pending_by_key[key] = p
 
     counts = {"proposed": 0, "updated": 0, "expired": 0}
+    # Drop snoozed copies superseded by a pending row for the same key.
+    kept_ids = {p["id"] for p in pending_by_key.values()}
+    for p in open_proposals:
+        if p["id"] not in kept_ids and p.get("status") == "snoozed":
+            expire_proposal(p["id"])
+            counts["expired"] += 1
     seen_keys: set[tuple[str, str, str, str]] = set()
     evaluated_slots: set[tuple[str, str]] = set()
 

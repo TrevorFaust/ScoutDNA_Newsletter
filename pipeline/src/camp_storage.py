@@ -163,19 +163,65 @@ def fetch_pending_proposals(
     return resp.data or []
 
 
+def fetch_open_proposals(
+    *, season: int = SEASON, team_abbr: str | None = None
+) -> list[dict[str, Any]]:
+    """Pending + snoozed proposals (the queue the proposer must not duplicate)."""
+    sb = get_client()
+    q = (
+        sb.table(CAMP_BATTLE_PROPOSALS)
+        .select("*")
+        .eq("season", season)
+        .in_("status", ["pending", "snoozed"])
+    )
+    if team_abbr:
+        q = q.eq("team_abbr", team_abbr.upper())
+    resp = q.execute()
+    return resp.data or []
+
+
 def wake_snoozed_proposals(*, season: int = SEASON) -> int:
-    """Flip snoozed proposals whose snooze_until has passed back to pending."""
+    """Flip ready snoozed proposals back to pending.
+
+    The unique index idx_camp_battle_proposals_one_pending only allows one
+    pending row per (season, team_abbr, position, slot, proposal_type). While
+    a proposal is snoozed, a later run may have inserted a new pending row for
+    the same key. Waking blindly then crashes the nightly job — so we wake
+    one-by-one and expire any snoozed row that would collide.
+    """
     sb = get_client()
     now = datetime.now(timezone.utc).isoformat()
-    resp = (
+    ready = (
         sb.table(CAMP_BATTLE_PROPOSALS)
-        .update({"status": "pending"})
+        .select("id, team_abbr, position, slot, proposal_type")
         .eq("season", season)
         .eq("status", "snoozed")
         .lte("snooze_until", now)
+        .order("created_at")
         .execute()
-    )
-    return len(resp.data or [])
+    ).data or []
+    if not ready:
+        return 0
+
+    pending_keys = {
+        (p["team_abbr"], p["position"], p["slot"], p["proposal_type"])
+        for p in fetch_pending_proposals(season=season)
+    }
+
+    woken = 0
+    for row in ready:
+        key = (row["team_abbr"], row["position"], row["slot"], row["proposal_type"])
+        if key in pending_keys:
+            # Superseded while asleep — drop the snoozed copy.
+            expire_proposal(row["id"])
+            continue
+        update_proposal(
+            row["id"],
+            {"status": "pending", "snooze_until": None},
+        )
+        pending_keys.add(key)
+        woken += 1
+    return woken
 
 
 def insert_proposal(row: dict[str, Any]) -> dict[str, Any]:
