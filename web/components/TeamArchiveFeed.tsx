@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { TeamSectionBody } from "@/components/TeamSectionBody";
 import { formatIssueDate, type IssueSummary } from "@/lib/issues";
+import { type TeamSectionContent } from "@/lib/sections";
 import { weekRangeLabel, weekRecapSubtitle } from "@/lib/dates";
-import type { TeamSectionContent } from "@/lib/sections";
+import { getTeams } from "@/lib/teams";
 
 export type TeamArchiveEntry = {
   issue: IssueSummary;
@@ -47,6 +48,7 @@ export function TeamArchiveFeed({
   playerEntries,
   emptyMessage,
 }: Props) {
+  const teamAbbr = getTeams().find((t) => t.slug === teamSlug)?.abbrev ?? null;
   if (entries.length === 0) {
     return <p className="empty-state">{emptyMessage}</p>;
   }
@@ -71,7 +73,11 @@ export function TeamArchiveFeed({
                 {isWeekly ? "Full weekly digest" : "Full digest"}
               </Link>
             </header>
-            <TeamSectionBody section={section} playerEntries={playerEntries} />
+            <TeamSectionBody
+              section={section}
+              playerEntries={playerEntries}
+              teamAbbr={teamAbbr}
+            />
           </article>
         );
       })}
