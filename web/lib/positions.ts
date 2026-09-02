@@ -1,6 +1,15 @@
 /** Position hues and badge classes (matches DraftDNA spreadsheet chips). */
 
-export type FantasyPosition = "QB" | "RB" | "WR" | "TE" | "K" | "DEF" | "OL" | "COACH";
+export type FantasyPosition =
+  | "QB"
+  | "RB"
+  | "WR"
+  | "TE"
+  | "K"
+  | "DEF"
+  | "OL"
+  | "COACH"
+  | "OTHER";
 
 const DEF_POSITIONS = new Set([
   "DEF",
@@ -49,7 +58,23 @@ const OL_POSITIONS = new Set([
 export function normalizePosition(raw: string | null | undefined): FantasyPosition | null {
   const pos = (raw || "").trim().toUpperCase();
   if (!pos) return null;
-  if (pos === "COACH" || pos === "HC" || pos === "OC" || pos === "DC" || pos === "GM") {
+  if (
+    pos === "COACH" ||
+    pos === "HC" ||
+    pos === "OC" ||
+    pos === "DC" ||
+    pos === "GM" ||
+    pos === "STC" ||
+    pos === "ST" ||
+    pos === "ASST" ||
+    pos === "ASSISTANT" ||
+    pos === "OWNER" ||
+    pos === "PRESIDENT" ||
+    pos === "OTHER" ||
+    pos === "MEDIA" ||
+    pos === "REPORTER"
+  ) {
+    if (pos === "OTHER" || pos === "MEDIA" || pos === "REPORTER") return "OTHER";
     return "COACH";
   }
   if (pos === "FB") return "RB";
@@ -80,6 +105,8 @@ export function getPositionBadgeClass(position: string): string {
       return "position-ol";
     case "COACH":
       return "position-coach";
+    case "OTHER":
+      return "position-other";
     default:
       return "position-unknown";
   }

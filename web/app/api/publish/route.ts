@@ -6,14 +6,22 @@ export async function POST(req: NextRequest) {
   const issueId = form.get("issueId") as string;
   const slug = form.get("slug") as string;
 
+  if (!issueId || !slug) {
+    return NextResponse.json({ error: "issueId and slug required" }, { status: 400 });
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
   const supabase = createClient(url, key);
 
-  await supabase
+  const { error } = await supabase
     .from("newsletter_issues")
     .update({ status: "published", published_at: new Date().toISOString() })
     .eq("id", issueId);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
   return NextResponse.redirect(new URL(`/issue/${slug}`, req.url), 303);
 }

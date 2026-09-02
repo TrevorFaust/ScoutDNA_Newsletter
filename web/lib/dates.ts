@@ -68,14 +68,29 @@ export function weekContentRange(weeklyIssueDate: string) {
   return { weekStart, sunday };
 }
 
+function dayOrdinal(n: number): string {
+  if (n % 100 >= 11 && n % 100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1:
+      return `${n}st`;
+    case 2:
+      return `${n}nd`;
+    case 3:
+      return `${n}rd`;
+    default:
+      return `${n}th`;
+  }
+}
+
+/** e.g. "August 3rd through 9th, 2026" */
 export function weekRangeLabel(weeklyIssueDate: string): string {
   const { weekStart, sunday } = weekContentRange(weeklyIssueDate);
 
   if (weekStart.m === sunday.m && weekStart.y === sunday.y) {
-    return `${MONTH_LONG[weekStart.m - 1]} ${weekStart.d}–${sunday.d}, ${sunday.y}`;
+    return `${MONTH_LONG[weekStart.m - 1]} ${dayOrdinal(weekStart.d)} through ${dayOrdinal(sunday.d)}, ${sunday.y}`;
   }
 
-  return `${MONTH_SHORT[weekStart.m - 1]} ${weekStart.d}–${MONTH_SHORT[sunday.m - 1]} ${sunday.d}, ${sunday.y}`;
+  return `${MONTH_LONG[weekStart.m - 1]} ${dayOrdinal(weekStart.d)} through ${MONTH_LONG[sunday.m - 1]} ${dayOrdinal(sunday.d)}, ${sunday.y}`;
 }
 
 export function weekRecapSubtitle(weeklyIssueDate: string): string {

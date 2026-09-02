@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { extractRumorFromTalk } from "@/lib/rumorTalk";
 
 type Props = {
@@ -9,6 +9,7 @@ type Props = {
   flags: string[];
   talkMarkdown: string | null;
   editable: boolean;
+  onResolved?: () => void;
 };
 
 export function RumorSectionActions({
@@ -16,18 +17,26 @@ export function RumorSectionActions({
   flags,
   talkMarkdown,
   editable,
+  onResolved,
 }: Props) {
   const router = useRouter();
+  const feedbackId = useId();
+  const feedbackRef = useRef<HTMLTextAreaElement>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [showReject, setShowReject] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [resolution, setResolution] = useState<"remove" | "rewrite" | "manual">("rewrite");
   const [manualTalk, setManualTalk] = useState(talkMarkdown ?? "");
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
 
-  const hasRumor = (flags ?? []).some(
-    (f) => f === "review:rumor" || (f.includes("rumor") && f.startsWith("review:"))
-  );
+  const hasRumor = (flags ?? []).includes("review:rumor");
   const rumorText = extractRumorFromTalk(talkMarkdown);
+
+  useEffect(() => {
+    if (!showReject) return;
+    const t = window.setTimeout(() => feedbackRef.current?.focus(), 0);
+    return () => window.clearTimeout(t);
+  }, [showReject]);
 
   if (!editable || !hasRumor) {
     return null;
@@ -35,6 +44,7 @@ export function RumorSectionActions({
 
   async function approve() {
     setBusy("approve");
+    setFeedbackError(null);
     try {
       const res = await fetch("/api/sections/approve-rumor", {
         method: "POST",
@@ -42,10 +52,12 @@ export function RumorSectionActions({
         body: JSON.stringify({ sectionId, action: "approve" }),
       });
       if (!res.ok) {
-        alert("Could not approve rumor");
+        const data = await res.json().catch(() => ({}));
+        alert(data.error ?? "Could not approve rumor");
         return;
       }
       setShowReject(false);
+      onResolved?.();
       router.refresh();
     } finally {
       setBusy(null);
@@ -53,12 +65,17 @@ export function RumorSectionActions({
   }
 
   async function reject() {
-    if (resolution !== "remove" && !feedback.trim() && resolution !== "manual") {
-      alert("Add feedback so the Talk section can be updated.");
+    setFeedbackError(null);
+
+    if (resolution === "rewrite" && !feedback.trim()) {
+      setFeedbackError(
+        "Add a note — e.g. which bullet to drop, or what to keep."
+      );
+      feedbackRef.current?.focus();
       return;
     }
     if (resolution === "manual" && !manualTalk.trim()) {
-      alert("Talk section cannot be empty.");
+      setFeedbackError("Activity section cannot be empty.");
       return;
     }
 
@@ -79,16 +96,19 @@ export function RumorSectionActions({
       if (res.status === 422 && data.needsManual) {
         setResolution("manual");
         setManualTalk(data.talk_markdown ?? manualTalk);
-        alert(
-          "AI rewrite needs your API key or manual edit. Edit Talk below and submit again."
+        setFeedbackError(
+          "AI rewrite needs your API key or a manual edit. Edit Talk below and submit again."
         );
         return;
       }
       if (!res.ok) {
-        alert(data.error ?? "Could not reject rumor");
+        setFeedbackError(data.error ?? "Could not reject rumor");
         return;
       }
       setShowReject(false);
+      setFeedback("");
+      setFeedbackError(null);
+      onResolved?.();
       router.refresh();
     } finally {
       setBusy(null);
@@ -96,104 +116,87 @@ export function RumorSectionActions({
   }
 
   return (
-    <div
-      style={{
-        margin: "0.5rem 0 1rem",
-        padding: "0.75rem",
-        border: "1px solid #c9a227",
-        borderRadius: 8,
-        background: "rgba(201, 162, 39, 0.08)",
-      }}
-    >
-      <div style={{ fontSize: "0.85rem", marginBottom: "0.5rem" }}>
-        Rumor flagged for review
-      </div>
+    <div className="rumor-actions">
+      <div className="rumor-actions-label">Rumor excerpt</div>
       {rumorText ? (
-        <blockquote
-          style={{
-            margin: "0 0 0.75rem",
-            padding: "0.65rem 0.85rem",
-            borderLeft: "3px solid #c9a227",
-            background: "var(--bg)",
-            borderRadius: "0 6px 6px 0",
-            whiteSpace: "pre-wrap",
-            fontSize: "0.95rem",
-            lineHeight: 1.45,
-          }}
-        >
-          {rumorText}
-        </blockquote>
+        <blockquote className="rumor-actions-excerpt">{rumorText}</blockquote>
       ) : (
-        <p
-          style={{
-            margin: "0 0 0.75rem",
-            fontSize: "0.85rem",
-            color: "var(--muted)",
-          }}
-        >
-          No rumor text found in Talk for this team.
-        </p>
+        <p className="rumor-actions-empty">No rumor text found in Talk for this team.</p>
       )}
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+      <div className="rumor-actions-buttons">
         <button
           type="button"
           className="btn"
           disabled={busy !== null}
           onClick={approve}
         >
-          {busy === "approve" ? "Saving…" : "✓ Approve rumor"}
+          {busy === "approve" ? "Saving…" : "Confirm"}
         </button>
         <button
           type="button"
-          className="btn"
+          className="btn btn-secondary"
           disabled={busy !== null}
-          onClick={() => setShowReject((v) => !v)}
-          style={{ opacity: 0.9, background: "var(--surface)", color: "var(--text)" }}
+          aria-expanded={showReject}
+          onClick={() => {
+            setShowReject((v) => !v);
+            setFeedbackError(null);
+          }}
         >
-          ✗ Reject rumor
+          Reject
         </button>
       </div>
 
       {showReject && (
-        <div style={{ marginTop: "0.75rem" }}>
-          <label style={{ display: "block", fontSize: "0.8rem", marginBottom: "0.35rem" }}>
-            What should change?
+        <div className="rumor-reject-panel">
+          <label htmlFor={feedbackId} className="rumor-reject-label">
+            Comment
           </label>
+          <p className="rumor-reject-hint">
+            Say what to keep and what to cut. Example: keep the first three
+            bullets; drop the free-agent CB rumor — no sourcing.
+          </p>
           <textarea
+            id={feedbackId}
+            ref={feedbackRef}
             value={feedback}
-            onChange={(e) => setFeedback(e.target.value)}
-            rows={3}
-            placeholder="e.g. Remove the WR depth rumor; not confirmed. Or: Soften to say podcast speculation only."
-            style={{
-              width: "100%",
-              padding: "0.5rem",
-              borderRadius: 6,
-              border: "1px solid var(--border)",
-              background: "var(--bg)",
-              color: "var(--text)",
-              fontSize: "0.9rem",
+            onChange={(e) => {
+              setFeedback(e.target.value);
+              if (feedbackError) setFeedbackError(null);
             }}
+            rows={4}
+            required={resolution === "rewrite"}
+            placeholder="e.g. Points 1–3 are fine. Ignore the 4th about the trade — podcast noise only."
+            className="rumor-reject-comment"
           />
-          <div style={{ marginTop: "0.5rem", fontSize: "0.85rem" }}>
-            <label style={{ display: "block", marginBottom: "0.25rem" }}>
+          {feedbackError && (
+            <p className="rumor-reject-error" role="alert">
+              {feedbackError}
+            </p>
+          )}
+
+          <fieldset className="rumor-reject-options">
+            <legend>How to apply</legend>
+            <label>
               <input
                 type="radio"
                 name={`rumor-res-${sectionId}`}
                 checked={resolution === "rewrite"}
                 onChange={() => setResolution("rewrite")}
-              />{" "}
-              Rewrite Talk using feedback (AI)
+              />
+              <span>
+                Rewrite Talk from this comment (AI) — best for partial keeps
+              </span>
             </label>
-            <label style={{ display: "block", marginBottom: "0.25rem" }}>
+            <label>
               <input
                 type="radio"
                 name={`rumor-res-${sectionId}`}
                 checked={resolution === "remove"}
                 onChange={() => setResolution("remove")}
-              />{" "}
-              Remove rumor block from Talk
+              />
+              <span>Strip the whole rumor block from Talk</span>
             </label>
-            <label style={{ display: "block", marginBottom: "0.25rem" }}>
+            <label>
               <input
                 type="radio"
                 name={`rumor-res-${sectionId}`}
@@ -202,37 +205,42 @@ export function RumorSectionActions({
                   setResolution("manual");
                   setManualTalk(talkMarkdown ?? "");
                 }}
-              />{" "}
-              Edit Talk manually
+              />
+              <span>Edit Talk manually</span>
             </label>
-          </div>
+          </fieldset>
+
           {resolution === "manual" && (
             <textarea
               value={manualTalk}
               onChange={(e) => setManualTalk(e.target.value)}
               rows={8}
-              style={{
-                width: "100%",
-                marginTop: "0.5rem",
-                padding: "0.5rem",
-                borderRadius: 6,
-                border: "1px solid var(--border)",
-                background: "var(--bg)",
-                color: "var(--text)",
-                fontFamily: "monospace",
-                fontSize: "0.8rem",
-              }}
+              aria-label="Edit Talk markdown"
+              className="rumor-reject-manual"
             />
           )}
-          <button
-            type="button"
-            className="btn"
-            disabled={busy !== null}
-            onClick={reject}
-            style={{ marginTop: "0.5rem" }}
-          >
-            {busy === "reject" ? "Saving…" : "Submit rejection"}
-          </button>
+
+          <div className="rumor-reject-submit">
+            <button
+              type="button"
+              className="btn"
+              disabled={busy !== null}
+              onClick={reject}
+            >
+              {busy === "reject" ? "Saving…" : "Submit rejection"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={busy !== null}
+              onClick={() => {
+                setShowReject(false);
+                setFeedbackError(null);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
     </div>

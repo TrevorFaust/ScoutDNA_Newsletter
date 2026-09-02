@@ -1,23 +1,58 @@
 "use client";
 
+import { useMemo } from "react";
 import { MarkdownBlock } from "@/components/MarkdownBlock";
 import { ReferencesDropdown } from "@/components/ReferencesDropdown";
+import { cleanCopy } from "@/lib/cleanCopy";
 import { usableField, type TeamSectionContent } from "@/lib/sections";
+import { buildChipMatcher } from "@/lib/wrapPlayerNames";
+import { deserializePlayerLookup } from "@/lib/playerRegistry";
 
 type Props = {
   section: TeamSectionContent;
   playerEntries?: import("@/lib/playerRegistry").PlayerLookupEntry[];
+  teamAbbr?: string | null;
 };
 
-export function TeamSectionBody({ section, playerEntries = [] }: Props) {
-  const intro = usableField(section.intro_paragraphs) ? section.intro_paragraphs : null;
-  const rookie = usableField(section.rookie_paragraph) ? section.rookie_paragraph : null;
-  const activity = usableField(section.activity_markdown) ? section.activity_markdown : null;
-  const talk = usableField(section.talk_markdown) ? section.talk_markdown : null;
-  const fantasy = usableField(section.fantasy_markdown) ? section.fantasy_markdown : null;
+function cleanField(value: string | null | undefined): string | null {
+  return usableField(value) ? cleanCopy(value!) : null;
+}
 
-  const sectionContext = [intro, rookie, activity, talk, fantasy].filter(Boolean).join("\n\n");
+export function TeamSectionBody({
+  section,
+  playerEntries = [],
+  teamAbbr,
+}: Props) {
+  const intro = cleanField(section.intro_paragraphs);
+  const rookie = cleanField(section.rookie_paragraph);
+  const activity = cleanField(section.activity_markdown);
+  const fantasy = cleanField(section.fantasy_markdown);
+
+  // Talk is retired: fold any legacy talk into activity display only if activity is empty.
+  const legacyTalk = cleanField(section.talk_markdown);
+  const activityOrTalk =
+    activity ??
+    (legacyTalk
+      ? legacyTalk.replace(/^#{1,6}\s*Talk\s*$/gim, "### Activity").trim()
+      : null);
+
+  const sectionContext = [intro, rookie, activityOrTalk, fantasy]
+    .filter(Boolean)
+    .join("\n\n");
   const footnotes = (section.footnotes ?? []).filter((f) => f.label?.trim() || f.url?.trim());
+
+  const lookup = useMemo(
+    () => deserializePlayerLookup(playerEntries),
+    [playerEntries]
+  );
+
+  const sharedMatcher = useMemo(
+    () =>
+      playerEntries.length > 0 && sectionContext
+        ? buildChipMatcher(lookup, sectionContext, teamAbbr)
+        : null,
+    [lookup, playerEntries.length, sectionContext, teamAbbr]
+  );
 
   return (
     <div className="prose-team team-section-body">
@@ -33,7 +68,7 @@ export function TeamSectionBody({ section, playerEntries = [] }: Props) {
       {intro && (
         <MarkdownBlock
           content={intro}
-          playerEntries={playerEntries}
+          sharedMatcher={sharedMatcher}
           contextText={sectionContext}
         />
       )}
@@ -42,29 +77,22 @@ export function TeamSectionBody({ section, playerEntries = [] }: Props) {
           <h3>Rookies & camp additions</h3>
           <MarkdownBlock
             content={rookie}
-            playerEntries={playerEntries}
+            sharedMatcher={sharedMatcher}
             contextText={sectionContext}
           />
         </>
       )}
-      {activity && (
+      {activityOrTalk && (
         <MarkdownBlock
-          content={activity}
-          playerEntries={playerEntries}
-          contextText={sectionContext}
-        />
-      )}
-      {talk && (
-        <MarkdownBlock
-          content={talk}
-          playerEntries={playerEntries}
+          content={activityOrTalk}
+          sharedMatcher={sharedMatcher}
           contextText={sectionContext}
         />
       )}
       {fantasy && (
         <MarkdownBlock
           content={fantasy}
-          playerEntries={playerEntries}
+          sharedMatcher={sharedMatcher}
           contextText={sectionContext}
         />
       )}

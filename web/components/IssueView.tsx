@@ -4,10 +4,13 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { IssueAdjacentNav } from "@/components/IssueAdjacentNav";
 import { MarkdownBlock } from "@/components/MarkdownBlock";
+import { PublishIssueForm } from "@/components/PublishIssueForm";
 import { ReferencesDropdown } from "@/components/ReferencesDropdown";
-import { RumorSectionActions } from "@/components/RumorSectionActions";
-import { cleanCopy, type AdjacentIssue } from "@/lib/issues";
+import { TeamSectionBody } from "@/components/TeamSectionBody";
+import { cleanCopy } from "@/lib/cleanCopy";
+import { type AdjacentIssue } from "@/lib/issues";
 import { getDivisionGroups } from "@/lib/teams";
+import { hasPendingRumorFlag } from "@/lib/rumorTalk";
 
 type Section = {
   id?: string;
@@ -16,7 +19,7 @@ type Section = {
   rookie_paragraph: string | null;
   activity_markdown: string | null;
   talk_markdown: string | null;
-  fantasy_markdown?: string | null;
+  fantasy_markdown: string | null;
   footnotes: { n: number; label: string; url: string }[];
   tags: string[];
   flags: string[];
@@ -30,6 +33,7 @@ type Footnote = { n: number; label: string; url: string };
 type Props = {
   title: string;
   status?: string;
+  issueId?: string;
   issueType?: "daily" | "weekly";
   issueDate?: string;
   leagueSection: string | null;
@@ -44,6 +48,7 @@ type Props = {
 export function IssueView({
   title,
   status,
+  issueId,
   issueType = "daily",
   issueDate,
   leagueSection,
@@ -55,7 +60,7 @@ export function IssueView({
   adjacentNext = null,
 }: Props) {
   const hasContent = sections.some(
-    (s) => s.intro_paragraphs || s.activity_markdown || s.talk_markdown
+    (s) => s.intro_paragraphs || s.activity_markdown || s.fantasy_markdown
   );
   const divisions = getDivisionGroups();
   const bySlug = Object.fromEntries(
@@ -70,6 +75,9 @@ export function IssueView({
 
   const editionHref = issueType === "weekly" ? "/weekly" : "/daily";
   const editionLabel = issueType === "weekly" ? "Weekly" : "Daily";
+  const canPublish =
+    Boolean(issueId && issueDate) &&
+    (status === "in_review" || status === "approved" || status === "draft");
 
   return (
     <main>
@@ -82,8 +90,20 @@ export function IssueView({
       </nav>
 
       <div className="issue-header">
-        <span className={`edition-badge edition-${issueType}`}>{editionLabel} Edition</span>
-        <h1>{cleanCopy(title)}</h1>
+        <div className="issue-header-text">
+          <span className={`edition-badge edition-${issueType}`}>{editionLabel} Edition</span>
+          <h1>{cleanCopy(title)}</h1>
+        </div>
+        {issueId && issueDate && (canPublish || status === "published") ? (
+          <div className="issue-header-actions">
+            {canPublish ? (
+              <PublishIssueForm issueId={issueId} slug={issueDate} />
+            ) : null}
+            <Link href={`/admin/drafts/${issueDate}`} className="btn btn-secondary">
+              External drafts
+            </Link>
+          </div>
+        ) : null}
       </div>
 
       <IssueAdjacentNav
@@ -97,11 +117,17 @@ export function IssueView({
           Status: <strong>{status}</strong>
         </p>
       )}
-      {status === "in_review" && issueDate && (
-        <p style={{ fontSize: "0.9rem" }}>
-          <Link href={`/admin/review/${issueDate}`}>Open review panel</Link>
-        </p>
-      )}
+      {status === "in_review" &&
+        issueDate &&
+        sections.some((s) => hasPendingRumorFlag(s.flags)) && (
+          <p className="issue-rumor-review-link">
+            <Link href={`/admin/review/${issueDate}`}>
+              Review rumors in Rumors tab (
+              {sections.filter((s) => hasPendingRumorFlag(s.flags)).length}{" "}
+              pending) — confirm/reject there, not in this writeup
+            </Link>
+          </p>
+        )}
       {(status === "collecting" || status === "collected") && !hasContent && (
         <div className="league-block" style={{ borderColor: "#f5a623" }}>
           <strong>Not written yet</strong>
@@ -115,7 +141,7 @@ export function IssueView({
       {leagueSection && (
         <div className="league-block">
           <strong>League-wide</strong>
-          <MarkdownBlock content={leagueSection} playerEntries={playerEntries} />
+          <MarkdownBlock content={cleanCopy(leagueSection)} playerEntries={playerEntries} />
           <ReferencesDropdown footnotes={leagueFootnotes} />
         </div>
       )}
@@ -146,28 +172,13 @@ export function IssueView({
           {teams.map((t) => {
             const sec = bySlug[t.slug];
             if (!sec) return null;
-            const sectionContext = [
-              sec.intro_paragraphs,
-              sec.rookie_paragraph,
-              sec.activity_markdown,
-              sec.talk_markdown,
-              sec.fantasy_markdown,
-            ]
-              .filter(Boolean)
-              .join("\n\n");
             return (
               <article key={t.slug} id={t.slug} className="team-section">
                 <h2>{t.name}</h2>
                 <div style={{ fontSize: "0.8rem", color: "var(--muted)" }}>#{t.abbrev}</div>
-                {sec.tags?.map((tag) => (
-                  <span key={tag} className="tag">
-                    {tag}
-                  </span>
-                ))}
                 {sec.flags
                   ?.filter(
                     (f) =>
-                      f.startsWith("review:") ||
                       f.startsWith("empty:") ||
                       f === "parse:error"
                   )
@@ -177,61 +188,17 @@ export function IssueView({
                       ⚠ {f.replace("review:", "")}
                     </span>
                   ))}
-                {sec.id && (
-                  <RumorSectionActions
-                    sectionId={sec.id}
-                    flags={sec.flags ?? []}
-                    talkMarkdown={sec.talk_markdown}
-                    editable={status === "in_review"}
-                  />
-                )}
-                {sec.intro_paragraphs && (
-                  <MarkdownBlock
-                    content={sec.intro_paragraphs}
-                    playerEntries={playerEntries}
-                    contextText={sectionContext}
-                  />
-                )}
-                {sec.rookie_paragraph && (
-                  <>
-                    <h3>Rookies & camp additions</h3>
-                    <MarkdownBlock
-                      content={sec.rookie_paragraph}
-                      playerEntries={playerEntries}
-                      contextText={sectionContext}
-                    />
-                  </>
-                )}
                 {sec.is_empty && !sec.intro_paragraphs && !sec.fantasy_markdown ? (
                   <p style={{ color: "var(--muted)" }}>
                     {sec.empty_reason ?? "No verified updates in the last 24 hours."}
                   </p>
                 ) : (
-                  <>
-                    {sec.activity_markdown && (
-                      <MarkdownBlock
-                        content={sec.activity_markdown}
-                        playerEntries={playerEntries}
-                        contextText={sectionContext}
-                      />
-                    )}
-                    {sec.talk_markdown && (
-                      <MarkdownBlock
-                        content={sec.talk_markdown}
-                        playerEntries={playerEntries}
-                        contextText={sectionContext}
-                      />
-                    )}
-                    {sec.fantasy_markdown && (
-                      <MarkdownBlock
-                        content={sec.fantasy_markdown}
-                        playerEntries={playerEntries}
-                        contextText={sectionContext}
-                      />
-                    )}
-                  </>
+                  <TeamSectionBody
+                    section={sec}
+                    playerEntries={playerEntries}
+                    teamAbbr={sec.teams.abbrev}
+                  />
                 )}
-                <ReferencesDropdown footnotes={sec.footnotes} />
               </article>
             );
           })}

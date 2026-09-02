@@ -2,10 +2,12 @@
 
 import ReactMarkdown from "react-markdown";
 import { normalizeInlineCitations } from "@/lib/citations";
+import { cleanCopy } from "@/lib/cleanCopy";
 import {
   buildChipMatcher,
   createChipSession,
   renderChildrenWithPlayerChips,
+  type ChipMatcher,
 } from "@/lib/wrapPlayerNames";
 import { deserializePlayerLookup, type PlayerLookupEntry } from "@/lib/playerRegistry";
 import { useMemo } from "react";
@@ -20,33 +22,56 @@ type Props = {
    * sibling block. Defaults to this block's own content.
    */
   contextText?: string;
+  /** Optional shared matcher built once per team section. */
+  sharedMatcher?: ChipMatcher | null;
+  /** Team abbrev so Higgins/Reed/etc. resolve to this club, not a namesake. */
+  teamAbbr?: string | null;
 };
 
-export function MarkdownBlock({ content, playerEntries = [], contextText }: Props) {
-  const normalized = normalizeInlineCitations(content);
+/**
+ * Fresh session per paragraph / list item so the first mention in that piece
+ * of news gets a badge, but later bullets about the same player still chip.
+ * Do not share a mutable Set across components — Strict Mode double-renders
+ * would skip chips on the second pass and break hydration.
+ */
+function chipComponents(matcher: ChipMatcher) {
+  return {
+    p: ({ children }: { children?: React.ReactNode }) => {
+      const session = createChipSession();
+      return <p>{renderChildrenWithPlayerChips(children, matcher, session)}</p>;
+    },
+    li: ({ children }: { children?: React.ReactNode }) => {
+      const session = createChipSession();
+      return <li>{renderChildrenWithPlayerChips(children, matcher, session)}</li>;
+    },
+  };
+}
+
+export function MarkdownBlock({
+  content,
+  playerEntries = [],
+  contextText,
+  sharedMatcher,
+  teamAbbr,
+}: Props) {
+  const normalized = cleanCopy(normalizeInlineCitations(content));
   const lookup = useMemo(
     () => deserializePlayerLookup(playerEntries),
     [playerEntries]
   );
 
-  const hasPlayers = playerEntries.length > 0;
+  const localMatcher = useMemo(() => {
+    if (sharedMatcher) return null;
+    if (playerEntries.length === 0) return null;
+    return buildChipMatcher(lookup, contextText ?? content, teamAbbr);
+  }, [sharedMatcher, playerEntries.length, lookup, contextText, content, teamAbbr]);
 
-  const matcher = useMemo(
-    () => (hasPlayers ? buildChipMatcher(lookup, contextText ?? content) : null),
-    [hasPlayers, lookup, contextText, content]
+  const matcher = sharedMatcher ?? localMatcher;
+
+  const components = useMemo(
+    () => (matcher ? chipComponents(matcher) : undefined),
+    [matcher]
   );
-
-  const components = useMemo(() => {
-    if (!matcher) return undefined;
-    return {
-      p: ({ children }: { children?: React.ReactNode }) => (
-        <p>{renderChildrenWithPlayerChips(children, matcher, createChipSession())}</p>
-      ),
-      li: ({ children }: { children?: React.ReactNode }) => (
-        <li>{renderChildrenWithPlayerChips(children, matcher, createChipSession())}</li>
-      ),
-    };
-  }, [matcher]);
 
   return (
     <div className="prose-team">

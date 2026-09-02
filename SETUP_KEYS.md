@@ -81,6 +81,25 @@ REDDIT_USER_AGENT=ScoutDNA-All32/1.0 (contact: your@email.com)
 
 ---
 
+## External drafts (Reddit + Substack)
+
+After review, the admin page can create **drafts only** on Reddit (per team sub) and Substack. Full walkthrough: [`docs/EXTERNAL_DRAFTS.md`](docs/EXTERNAL_DRAFTS.md).
+
+Add to **`web/.env.local`**:
+
+```env
+EXTERNAL_DRAFTS_ENABLED=true
+REDDIT_CLIENT_ID=...
+REDDIT_CLIENT_SECRET=...
+REDDIT_USER_AGENT=DraftDNA-Newsletter/1.0 (by /u/you; contact: you@email.com)
+REDDIT_USERNAME=your_reddit_username
+REDDIT_PASSWORD=your_reddit_password
+SUBSTACK_PUBLICATION_URL=https://trevorfaust.substack.com
+SUBSTACK_CONNECT_SID=connect.sid_value_from_browser
+```
+
+---
+
 ## Resend (skip for now)
 
 Leave blank until Phase 2 email.

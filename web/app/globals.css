@@ -20,6 +20,7 @@
   --def: 0 70% 55%;
   --ol: 55 90% 52%;
   --coach: 45 45% 88%;
+  --other: 210 18% 62%;
 }
 
 * {
@@ -708,12 +709,34 @@ header.site a.brand {
 /* ——— Issue reader ——— */
 
 .issue-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem 1.25rem;
   margin-bottom: 1rem;
+}
+
+.issue-header-text {
+  flex: 1 1 16rem;
+  min-width: 0;
 }
 
 .issue-header h1 {
   margin: 0.6rem 0 0;
   font-size: clamp(1.5rem, 3.5vw, 2rem);
+}
+
+.issue-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  padding-top: 0.15rem;
+}
+
+.issue-header-actions .btn {
+  min-height: 44px;
 }
 
 .issue-status {
@@ -963,6 +986,12 @@ header.site a.brand {
   background: hsl(var(--coach) / 0.2);
   color: hsl(var(--coach));
   border: 1px solid hsl(var(--coach) / 0.5);
+}
+
+.position-other {
+  background: hsl(var(--other) / 0.18);
+  color: hsl(var(--other));
+  border: 1px solid hsl(var(--other) / 0.45);
 }
 
 .position-unknown {
@@ -1217,6 +1246,33 @@ main.camp-admin {
   gap: 1rem;
 }
 
+.camp-team-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+.camp-team-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.85rem 1rem 1rem;
+  background: color-mix(in srgb, var(--bg-elevated) 80%, transparent);
+}
+
+.camp-team-group-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.camp-team-group .camp-proposal-list,
+.camp-team-group .camp-signal-feed,
+.camp-team-group .camp-slot-list {
+  margin-top: 0.35rem;
+}
+
 .camp-proposal-card {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1327,4 +1383,409 @@ main.camp-admin {
   .camp-proposal-arrow {
     display: none;
   }
+}
+
+/* ——— Rumors admin ——— */
+
+.rumor-edition-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0;
+}
+
+.rumor-edition-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s;
+}
+
+.rumor-edition-list li:first-child .rumor-edition-row {
+  border-top: none;
+  padding-top: 0;
+}
+
+.rumor-edition-row:hover {
+  background: hsl(210 40% 18% / 0.45);
+  margin-inline: -0.5rem;
+  padding-inline: 0.5rem;
+  border-radius: 6px;
+}
+
+.rumor-edition-title {
+  display: block;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.rumor-edition-meta {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+
+.rumor-edition-count {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 3.25rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  background: hsl(35 60% 25%);
+  color: var(--weekly);
+  font-weight: 700;
+  font-size: 1.15rem;
+  line-height: 1.1;
+}
+
+.rumor-edition-count-zero {
+  background: var(--tag);
+  color: var(--text);
+}
+
+.rumor-edition-count-label {
+  font-size: 0.65rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
+.rumor-edition-main {
+  flex: 1;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+}
+
+.rumor-edition-side {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.rumor-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.rumor-review-actions .btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.rumor-publish-hint {
+  margin: -0.5rem 0 1.25rem;
+}
+
+.export-drafts-report {
+  margin-top: 1rem;
+  font-size: 0.95rem;
+}
+
+.export-drafts-report ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.export-drafts-error {
+  color: #b42318;
+  margin-top: 0.75rem;
+}
+
+.export-drafts-failures {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted, #666);
+}
+
+.rumor-team-queue {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0;
+}
+
+.rumor-team-item {
+  border-top: 1px solid var(--border);
+  padding: 1rem 0 0.25rem;
+}
+
+.rumor-team-item:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.rumor-team-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  margin-bottom: 0.35rem;
+}
+
+.rumor-team-index {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.rumor-team-name {
+  font-size: 1.05rem;
+}
+
+.rumor-flag-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0;
+}
+
+.rumor-flag-list li {
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.rumor-flag-list li:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.rumor-actions {
+  margin: 0.5rem 0 1rem;
+  padding: 0.75rem;
+  border: 1px solid #c9a227;
+  border-radius: 8px;
+  background: rgba(201, 162, 39, 0.08);
+}
+
+.rumor-actions-label {
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+  color: var(--muted);
+}
+
+.rumor-actions-excerpt {
+  margin: 0 0 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-left: 3px solid #c9a227;
+  background: var(--bg);
+  border-radius: 0 6px 6px 0;
+  white-space: pre-wrap;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.rumor-actions-empty {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.rumor-actions-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.rumor-reject-panel {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid hsl(35 40% 35% / 0.55);
+}
+
+.rumor-reject-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.rumor-reject-hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.rumor-reject-comment,
+.rumor-reject-manual {
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.rumor-reject-comment:focus,
+.rumor-reject-manual:focus {
+  outline: 2px solid var(--weekly);
+  outline-offset: 1px;
+  border-color: var(--weekly);
+}
+
+.rumor-reject-manual {
+  margin-top: 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+}
+
+.rumor-reject-error {
+  margin: 0.45rem 0 0;
+  font-size: 0.85rem;
+  color: hsl(0 70% 65%);
+}
+
+.rumor-reject-options {
+  margin: 0.75rem 0 0;
+  padding: 0;
+  border: none;
+  font-size: 0.85rem;
+}
+
+.rumor-reject-options legend {
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rumor-reject-options label {
+  display: flex;
+  gap: 0.45rem;
+  align-items: flex-start;
+  margin-bottom: 0.35rem;
+  cursor: pointer;
+}
+
+.rumor-reject-options input {
+  margin-top: 0.2rem;
+}
+
+.rumor-reject-submit {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+.issue-rumor-review-link {
+  font-size: 0.9rem;
+  margin: 0.5rem 0 1rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid hsl(35 60% 35%);
+  border-radius: 8px;
+  background: rgba(201, 162, 39, 0.08);
+}
+
+/* ——— Usage admin ——— */
+
+main.usage-admin {
+  max-width: 72rem;
+}
+
+.usage-header-links {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.usage-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: flex-end;
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.15rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.usage-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.usage-filters select {
+  width: auto;
+  min-width: 6.5rem;
+  margin: 0;
+}
+
+.usage-column-key {
+  display: grid;
+  gap: 0.55rem 1.25rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+@media (min-width: 720px) {
+  .usage-column-key {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.usage-column-key > div {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.usage-column-key dt {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.usage-column-key dd {
+  margin: 0;
+  color: var(--muted);
+}
+
+.usage-table-wrap {
+  overflow-x: auto;
+  margin-top: 0.5rem;
+}
+
+.usage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.usage-table th,
+.usage-table td {
+  text-align: right;
+  padding: 0.3rem 0.45rem;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.usage-table th:first-child,
+.usage-table td:first-child,
+.usage-table th:nth-child(2),
+.usage-table td:nth-child(2) {
+  text-align: left;
 }

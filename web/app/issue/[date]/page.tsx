@@ -11,6 +11,8 @@ type Props = {
   searchParams: Promise<{ team?: string }>;
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function IssuePage({ params, searchParams }: Props) {
   const { date } = await params;
   const { team: teamParam } = await searchParams;
@@ -51,6 +53,7 @@ export default async function IssuePage({ params, searchParams }: Props) {
     <IssueView
       title={issue.title}
       status={issue.status}
+      issueId={issue.id}
       issueType={issue.issue_type as "daily" | "weekly"}
       issueDate={date}
       leagueSection={issue.league_section}

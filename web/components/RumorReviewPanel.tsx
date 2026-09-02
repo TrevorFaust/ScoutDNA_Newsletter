@@ -1,43 +1,53 @@
 "use client";
 
+import { useState } from "react";
 import { RumorSectionActions } from "@/components/RumorSectionActions";
 
 type SectionRow = {
   id: string;
   flags: string[];
+  activity_markdown?: string | null;
   talk_markdown: string | null;
   newsletter_teams: { name: string; slug: string };
 };
 
 export function RumorReviewPanel({ sections }: { sections: SectionRow[] }) {
-  const rumorSections = sections.filter((s) =>
-    (s.flags ?? []).includes("review:rumor")
+  const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
+
+  const rumorSections = sections.filter(
+    (s) => (s.flags ?? []).includes("review:rumor") && !dismissed.has(s.id)
   );
 
   if (rumorSections.length === 0) {
     return (
-      <p style={{ color: "var(--muted)" }}>No rumor flags in this draft.</p>
+      <p className="camp-admin-muted" style={{ marginTop: "1rem" }}>
+        No rumor flags left in this draft.
+      </p>
     );
   }
 
   return (
-    <ul style={{ listStyle: "none", padding: 0 }}>
-      {rumorSections.map((s) => (
-        <li
-          key={s.id}
-          style={{
-            border: "1px solid var(--border, #333)",
-            borderRadius: 8,
-            padding: "1rem",
-            marginBottom: "0.75rem",
-          }}
-        >
-          <strong>{s.newsletter_teams.name}</strong>
+    <ul className="rumor-team-queue">
+      {rumorSections.map((s, index) => (
+        <li key={s.id} className="rumor-team-item">
+          <div className="rumor-team-head">
+            <span className="rumor-team-index">
+              {index + 1} / {rumorSections.length}
+            </span>
+            <strong className="rumor-team-name">{s.newsletter_teams.name}</strong>
+          </div>
           <RumorSectionActions
             sectionId={s.id}
             flags={s.flags}
-            talkMarkdown={s.talk_markdown}
+            talkMarkdown={s.activity_markdown?.trim() ? s.activity_markdown : s.talk_markdown}
             editable
+            onResolved={() =>
+              setDismissed((prev) => {
+                const next = new Set(prev);
+                next.add(s.id);
+                return next;
+              })
+            }
           />
         </li>
       ))}

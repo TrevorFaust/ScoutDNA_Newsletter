@@ -1,6 +1,8 @@
 import { createServerClient } from "@/lib/supabase";
 import { formatIssueDate } from "@/lib/dates";
 
+export { cleanCopy } from "@/lib/cleanCopy";
+
 export type IssueSummary = {
   issue_date: string;
   slug: string;
@@ -66,11 +68,6 @@ export type AdjacentIssue = {
   title: string;
   issue_date: string;
 };
-
-/** Remove em dashes from titles and descriptions shown on the site. */
-export function cleanCopy(text: string): string {
-  return text.replace(/\s*—\s*/g, ", ").replace(/,\s*,/g, ",");
-}
 
 export async function fetchAdjacentIssues(
   issueDate: string,

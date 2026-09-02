@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createServerClient } from "@/lib/supabase";
-import { cleanCopy } from "@/lib/issues";
+import { cleanCopy, formatIssueDate, statusLabel } from "@/lib/issues";
+import { PublishIssueForm } from "@/components/PublishIssueForm";
 import { RumorReviewPanel } from "@/components/RumorReviewPanel";
 
 type Props = { params: Promise<{ date: string }> };
@@ -14,6 +15,8 @@ function teamFromSection(s: { newsletter_teams: unknown }): { name: string; slug
   return t ?? { name: "Team", slug: "" };
 }
 
+export const dynamic = "force-dynamic";
+
 export default async function ReviewPage({ params }: Props) {
   const { date } = await params;
   const supabase = createServerClient();
@@ -26,21 +29,42 @@ export default async function ReviewPage({ params }: Props) {
 
   if (!issue) {
     return (
-      <main>
+      <main className="camp-admin">
+        <p className="camp-admin-eyebrow">Admin</p>
         <h1>Review</h1>
         <p>No draft for {date}.</p>
+        <p>
+          <Link href="/admin/rumors">← Back to Rumors</Link>
+        </p>
       </main>
     );
   }
 
   const { data: sections } = await supabase
     .from("newsletter_sections")
-    .select("id, flags, talk_markdown, sort_order, newsletter_teams(name, slug)")
+    .select(
+      "id, flags, activity_markdown, talk_markdown, sort_order, newsletter_teams(name, slug)"
+    )
     .eq("issue_id", issue.id)
     .order("sort_order");
 
-  const flagged = (sections ?? []).filter((s) =>
-    (s.flags as string[])?.some(
+  const sectionRows = (sections ?? []).map((s) => {
+    const t = teamFromSection(s);
+    return {
+      id: s.id as string,
+      flags: (s.flags as string[]) ?? [],
+      activity_markdown: s.activity_markdown as string | null,
+      talk_markdown: s.talk_markdown as string | null,
+      newsletter_teams: t,
+    };
+  });
+
+  const pendingRumors = sectionRows.filter((s) =>
+    s.flags.includes("review:rumor")
+  ).length;
+
+  const flagged = sectionRows.filter((s) =>
+    s.flags.some(
       (f) =>
         f.includes("review") ||
         f.includes("rumor") ||
@@ -50,58 +74,95 @@ export default async function ReviewPage({ params }: Props) {
   );
 
   return (
-    <main>
-      <h1>Review: {cleanCopy(issue.title)}</h1>
-      <p>
-        Status: <strong>{issue.status}</strong>
-      </p>
-      <p>
-        <Link href={`/issue/${date}`}>Preview issue</Link>
-        {" · "}
-        <Link href="/admin/camp-signals">Camp signals</Link>
-      </p>
-      <form action={`/api/publish`} method="post" style={{ margin: "1rem 0" }}>
-        <input type="hidden" name="issueId" value={issue.id} />
-        <input type="hidden" name="slug" value={date} />
-        <button type="submit" className="btn">
-          Approve & publish
-        </button>
-      </form>
+    <main className="camp-admin">
+      <header className="camp-admin-header">
+        <div>
+          <p className="camp-admin-eyebrow">
+            <Link href="/admin/rumors">Rumors</Link>
+            {" · "}
+            {issue.issue_type === "weekly" ? "Weekly" : "Daily"}
+          </p>
+          <h1>{cleanCopy(issue.title)}</h1>
+          <p className="camp-admin-lead">
+            {formatIssueDate(issue.issue_date)} · {statusLabel(issue.status)} ·{" "}
+            {pendingRumors === 0
+              ? "No pending rumors"
+              : `${pendingRumors} team${pendingRumors === 1 ? "" : "s"} to review`}
+          </p>
+        </div>
+        <div className="rumor-review-actions">
+          <Link href={`/issue/${date}`} className="btn btn-secondary">
+            Preview issue
+          </Link>
+          <Link href={`/admin/drafts/${date}`} className="btn btn-secondary">
+            External drafts
+          </Link>
+          {issue.status !== "published" ? (
+            <PublishIssueForm
+              issueId={issue.id}
+              slug={date}
+              label="Publish"
+            />
+          ) : (
+            <span className="camp-admin-muted">Published</span>
+          )}
+        </div>
+      </header>
 
-      <h2>Rumor review</h2>
-      <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
-        Approve rumors to clear the draft flag. Published sections keep rumor wording in Talk but
-        lose the review badge.
-      </p>
-      <RumorReviewPanel
-        sections={(sections ?? []).map((s) => {
-          const t = teamFromSection(s);
-          return {
-            id: s.id as string,
-            flags: (s.flags as string[]) ?? [],
-            talk_markdown: s.talk_markdown as string | null,
-            newsletter_teams: t,
-          };
-        })}
-      />
-
-      <h2>Other flags ({flagged.length})</h2>
-      <ul>
-        {flagged.map((s) => {
-          const t = teamFromSection(s);
-          return (
-          <li key={s.id}>
-            <Link href={`/issue/${date}?team=${t.slug}#${t.slug}`}>
-              {t.name}
-            </Link>
-            : {(s.flags as string[])?.join(", ")}
-          </li>
-          );
-        })}
-      </ul>
-      {flagged.length === 0 && (
-        <p style={{ color: "var(--muted)" }}>No flags. Still skim injuries before publishing.</p>
+      {pendingRumors > 0 && (
+        <p className="camp-admin-muted rumor-publish-hint">
+          Clear all rumor flags before publishing, or preview the full issue first.
+        </p>
       )}
+
+      <section className="camp-admin-card">
+        <h2>Team rumors ({pendingRumors})</h2>
+        <p className="camp-admin-muted">
+          Confirm keeps the Talk wording and clears the review badge. Reject
+          opens a comment box — note what to keep or cut (e.g. drop only the
+          fourth bullet), then rewrite, strip, or edit manually.
+        </p>
+        <RumorReviewPanel sections={sectionRows} />
+      </section>
+
+      <section className="camp-admin-card">
+        <h2>Other flags ({flagged.length})</h2>
+        {flagged.length === 0 ? (
+          <p className="camp-admin-muted">
+            No flags. Still skim injuries before publishing.
+          </p>
+        ) : (
+          <ul className="rumor-flag-list">
+            {flagged.map((s) => (
+              <li key={s.id}>
+                <Link href={`/issue/${date}?team=${s.newsletter_teams.slug}#${s.newsletter_teams.slug}`}>
+                  {s.newsletter_teams.name}
+                </Link>
+                <span className="camp-admin-muted">
+                  {" — "}
+                  {s.flags.join(", ")}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="camp-admin-card">
+        <h2>External drafts</h2>
+        <p className="camp-admin-muted">
+          Substack and Reddit draft creation lives on its own admin page so it
+          stays available after you publish.
+        </p>
+        <div className="rumor-review-actions">
+          <Link href={`/admin/drafts/${date}`} className="btn">
+            Create Substack + Reddit drafts
+          </Link>
+          <Link href="/admin/drafts" className="btn btn-secondary">
+            All editions
+          </Link>
+        </div>
+      </section>
     </main>
   );
 }

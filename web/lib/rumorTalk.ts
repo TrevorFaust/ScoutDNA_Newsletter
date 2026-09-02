@@ -1,3 +1,8 @@
+/** True when a section still needs Confirm/Reject in the Rumors queue. */
+export function hasPendingRumorFlag(flags: string[] | null | undefined): boolean {
+  return (flags ?? []).includes("review:rumor");
+}
+
 /** Detect a marked rumor callout line (used when stripping on reject). */
 function isRumorCalloutLine(line: string): boolean {
   const lower = line.toLowerCase();
@@ -8,11 +13,20 @@ function isRumorCalloutLine(line: string): boolean {
   );
 }
 
-/** Pull rumor callouts from Talk for the review UI. Falls back to full Talk body. */
-export function extractRumorFromTalk(talk: string | null): string {
-  if (!talk?.trim()) return "";
+/** Prefer Activity (where rumors now live); fall back to legacy Talk. */
+export function rumorSourceMarkdown(
+  activity: string | null | undefined,
+  talk: string | null | undefined
+): string {
+  if (activity?.trim()) return activity;
+  return talk?.trim() ? talk : "";
+}
 
-  const lines = talk.split("\n");
+/** Pull rumor callouts from Activity/Talk for the review UI. */
+export function extractRumorFromTalk(markdown: string | null): string {
+  if (!markdown?.trim()) return "";
+
+  const lines = markdown.split("\n");
   const blocks: string[] = [];
   let current: string[] = [];
   let inRumorBlock = false;
@@ -45,18 +59,56 @@ export function extractRumorFromTalk(talk: string | null): string {
   const extracted = blocks.filter(Boolean).join("\n\n").trim();
   if (extracted) return extracted;
 
-  // No marked callout — show Talk body so reviewers still see the rumor prose.
+  // No marked callout — show body so reviewers still see the rumor prose.
   return lines
-    .filter((l) => !/^#{1,6}\s*Talk\s*$/i.test(l.trim()))
+    .filter(
+      (l) =>
+        !/^#{1,6}\s*(Talk|Activity)\s*$/i.test(l.trim())
+    )
     .join("\n")
     .trim();
 }
 
-/** Strip rumor callouts from Talk markdown after reject-remove. */
-export function stripRumorFromTalk(talk: string | null): string {
-  if (!talk?.trim()) return talk ?? "";
+/**
+ * Remove draft/review meta after a decision so the edition no longer
+ * reads like it is waiting for approval.
+ */
+export function stripReviewMetaFromTalk(markdown: string | null): string {
+  if (!markdown?.trim()) return markdown ?? "";
 
-  const lines = talk.split("\n");
+  const cleaned = markdown
+    .split("\n")
+    .map((line) => {
+      let next = line;
+      next = next.replace(/\*\*review:rumor\*\*/gi, "");
+      next = next.replace(/\breview:rumor\b/gi, "");
+      next = next.replace(
+        /\s*[—–-]?\s*(?:and\s+)?(?:the\s+)?story carries a\s+flag[^.]*\./gi,
+        ""
+      );
+      next = next.replace(
+        /\s*[—–-]?\s*(?:given|with)\s+its\s+[^.]*flag[^.]*\./gi,
+        ""
+      );
+      next = next.replace(/\s*\(\s*needs[- ]review\s*\)/gi, "");
+      next = next.replace(/\s{2,}/g, " ").replace(/\s+([.,;:])/g, "$1");
+      return next.trimEnd();
+    })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  if (/^#{1,6}\s*(Talk|Activity)\s*$/i.test(cleaned)) {
+    return "";
+  }
+  return cleaned;
+}
+
+/** Strip rumor callouts from Activity/Talk markdown after reject-remove. */
+export function stripRumorFromTalk(markdown: string | null): string {
+  if (!markdown?.trim()) return markdown ?? "";
+
+  const lines = markdown.split("\n");
   const out: string[] = [];
   let inRumorBlock = false;
 
@@ -77,7 +129,7 @@ export function stripRumorFromTalk(talk: string | null): string {
   }
 
   let cleaned = out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-  if (cleaned === "### Talk" || cleaned === "### Talk\n") {
+  if (/^#{1,6}\s*(Talk|Activity)\s*$/i.test(cleaned)) {
     return "";
   }
   return cleaned;

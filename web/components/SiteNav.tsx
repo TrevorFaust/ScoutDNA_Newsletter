@@ -8,6 +8,21 @@ const SIMPLE_LINKS = [
   { href: "/", label: "Home", match: (p: string) => p === "/" },
   { href: "/daily", label: "Daily", match: (p: string) => p.startsWith("/daily") },
   { href: "/weekly", label: "Weekly", match: (p: string) => p.startsWith("/weekly") },
+  {
+    href: "/admin/rumors",
+    label: "Rumors",
+    match: (p: string) => p.startsWith("/admin/rumors") || p.startsWith("/admin/review"),
+  },
+  {
+    href: "/admin/drafts",
+    label: "Drafts",
+    match: (p: string) => p.startsWith("/admin/drafts"),
+  },
+  {
+    href: "/admin/usage",
+    label: "Usage",
+    match: (p: string) => p.startsWith("/admin/usage"),
+  },
 ] as const;
 
 function isTeamsActive(pathname: string) {
