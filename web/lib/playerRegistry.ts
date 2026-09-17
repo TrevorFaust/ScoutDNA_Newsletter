@@ -115,7 +115,6 @@ export async function fetchPlayerPositionLookup(
         supabase
           .from("depth_charts_2026")
           .select("player_name, pos_abb, team_abbr")
-          .in("pos_abb", ["LT", "RT", "LG", "RG", "C", "T", "G", "OT", "OG", "OL", "IOL"])
           .order("player_name")
           .range(from, to),
       "player_name",

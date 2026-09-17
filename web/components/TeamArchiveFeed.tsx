@@ -2,7 +2,7 @@ import Link from "next/link";
 import { TeamSectionBody } from "@/components/TeamSectionBody";
 import { formatIssueDate, type IssueSummary } from "@/lib/issues";
 import { type TeamSectionContent } from "@/lib/sections";
-import { weekRangeLabel, weekRecapSubtitle } from "@/lib/dates";
+import { recapLabel, weekRecapSubtitle } from "@/lib/dates";
 import { getTeams } from "@/lib/teams";
 
 export type TeamArchiveEntry = {
@@ -23,9 +23,9 @@ function EntryHeader({ issue }: { issue: IssueSummary }) {
   if (isWeekly) {
     return (
       <>
-        <span className="edition-badge edition-weekly">Week in review</span>
+        <span className="edition-badge edition-weekly">Week recap</span>
         <div className="team-week-heading">
-          <span className="team-day-date">{weekRangeLabel(issue.issue_date)}</span>
+          <span className="team-day-date">{recapLabel(issue.issue_date)}</span>
           <span className="team-week-subtitle">{weekRecapSubtitle(issue.issue_date)}</span>
         </div>
       </>

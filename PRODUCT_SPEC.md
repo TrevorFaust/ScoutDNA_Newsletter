@@ -15,8 +15,8 @@ Parent site: **DraftDNA**. Newsletter product name TBD (see README naming option
 
 | Day | Issue |
 |-----|--------|
-| Tue–Sun | Daily |
-| Mon | Weekly rollup only (replaces daily) |
+| Every morning | Collect (raw items, including Sunday) |
+| Tue after 3am PT nflverse sync | Week N recap (prior Tue–Mon, includes MNF) |
 
 ## Audience & voice
 

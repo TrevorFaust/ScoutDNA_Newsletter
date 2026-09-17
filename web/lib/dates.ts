@@ -61,11 +61,11 @@ export function formatIssueDate(iso: string): string {
   return `${weekday}, ${MONTH_SHORT[m - 1]} ${d}, ${y}`;
 }
 
-/** Monday weekly issue → prior Mon–Sun content window (matches pipeline). */
+/** Weekly issue → 7 calendar days ending the day before (Tue issue = Tue–Mon). */
 export function weekContentRange(weeklyIssueDate: string) {
-  const sunday = addCalendarDays(weeklyIssueDate, -1);
+  const weekEnd = addCalendarDays(weeklyIssueDate, -1);
   const weekStart = addCalendarDays(weeklyIssueDate, -7);
-  return { weekStart, sunday };
+  return { weekStart, weekEnd };
 }
 
 function dayOrdinal(n: number): string {
@@ -84,18 +84,48 @@ function dayOrdinal(n: number): string {
 
 /** e.g. "August 3rd through 9th, 2026" */
 export function weekRangeLabel(weeklyIssueDate: string): string {
-  const { weekStart, sunday } = weekContentRange(weeklyIssueDate);
+  const { weekStart, weekEnd } = weekContentRange(weeklyIssueDate);
 
-  if (weekStart.m === sunday.m && weekStart.y === sunday.y) {
-    return `${MONTH_LONG[weekStart.m - 1]} ${dayOrdinal(weekStart.d)} through ${dayOrdinal(sunday.d)}, ${sunday.y}`;
+  if (weekStart.m === weekEnd.m && weekStart.y === weekEnd.y) {
+    return `${MONTH_LONG[weekStart.m - 1]} ${dayOrdinal(weekStart.d)} through ${dayOrdinal(weekEnd.d)}, ${weekEnd.y}`;
   }
 
-  return `${MONTH_LONG[weekStart.m - 1]} ${dayOrdinal(weekStart.d)} through ${MONTH_LONG[sunday.m - 1]} ${dayOrdinal(sunday.d)}, ${sunday.y}`;
+  return `${MONTH_LONG[weekStart.m - 1]} ${dayOrdinal(weekStart.d)} through ${MONTH_LONG[weekEnd.m - 1]} ${dayOrdinal(weekEnd.d)}, ${weekEnd.y}`;
+}
+
+const REG_WEEK1_TUESDAY = "2026-09-15";
+
+function daysBetween(fromIso: string, toIso: string): number {
+  const a = parseCalendarDate(fromIso);
+  const b = parseCalendarDate(toIso);
+  const ms = Date.UTC(b.y, b.m - 1, b.d) - Date.UTC(a.y, a.m - 1, a.d);
+  return Math.floor(ms / 86_400_000);
+}
+
+/** NFL regular-season week for a Tuesday recap. Null for preseason issues. */
+export function nflWeekNumber(weeklyIssueDate: string): number | null {
+  const delta = daysBetween(REG_WEEK1_TUESDAY, weeklyIssueDate);
+  if (delta < 0) return null;
+  return 1 + Math.floor(delta / 7);
+}
+
+/** Display title: "Week 1 recap" in season, date range in preseason. */
+export function recapLabel(weeklyIssueDate: string): string {
+  const n = nflWeekNumber(weeklyIssueDate);
+  if (n) return `Week ${n} recap`;
+  return weekRangeLabel(weeklyIssueDate);
+}
+
+export function weeklyEditionLabel(weeklyIssueDate: string): string {
+  return nflWeekNumber(weeklyIssueDate) ? recapLabel(weeklyIssueDate) : "Weekly";
 }
 
 export function weekRecapSubtitle(weeklyIssueDate: string): string {
-  const { weekStart, sunday } = weekContentRange(weeklyIssueDate);
+  const { weekStart, weekEnd } = weekContentRange(weeklyIssueDate);
   const fmt = ({ y, m, d }: CalendarDate) =>
     `${WEEKDAY_SHORT[utcWeekday(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`)]}, ${MONTH_SHORT[m - 1]} ${d}`;
-  return `Week in review: ${fmt(weekStart)} through ${fmt(sunday)}`;
+  const range = `${fmt(weekStart)} through ${fmt(weekEnd)}`;
+  const n = nflWeekNumber(weeklyIssueDate);
+  if (n) return `Week ${n} recap · ${range}`;
+  return `Week in review: ${range}`;
 }

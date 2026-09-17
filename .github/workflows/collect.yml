@@ -18,7 +18,11 @@ on:
         type: boolean
         default: false
       force_daily_compose:
-        description: Force a full daily edition (all 32 teams) even though it's not Monday
+        description: Force a full daily edition (all 32 teams) even though it's not Tuesday
+        type: boolean
+        default: false
+      force_weekly_compose:
+        description: Force weekly compose for the resolved issue date (backfill)
         type: boolean
         default: false
 
@@ -27,38 +31,43 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 480
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install dependencies
         run: |
           pip install -r pipeline/requirements.txt tzdata
           pip install yt-dlp
-      - name: Resolve compose mode (Monday = weekly, otherwise none unless forced)
+      - name: Resolve dates (always yesterday; Tuesday also collects today for MNF)
         id: mode
         run: |
           if [ -n "${{ github.event.inputs.issue_date }}" ]; then
             ISSUE="${{ github.event.inputs.issue_date }}"
             DOW=$(TZ=America/Los_Angeles date -d "$ISSUE" +%u)
+            TODAY=""
           else
             DOW=$(TZ=America/Los_Angeles date +%u)
             ISSUE=$(TZ=America/Los_Angeles date -d "yesterday" +%Y-%m-%d)
+            TODAY=$(TZ=America/Los_Angeles date +%Y-%m-%d)
           fi
           FORCE_DAILY="${{ github.event.inputs.force_daily_compose }}"
+          FORCE_WEEKLY="${{ github.event.inputs.force_weekly_compose }}"
+          EXTRA=""
+          # Tuesday 1am also ingests today's window (Monday Night Football talk).
+          # Weekly LLM compose waits for the 3am PT nflverse sync, not this job.
+          if [ -z "${{ github.event.inputs.issue_date }}" ] && [ "$DOW" = "2" ]; then
+            EXTRA="$TODAY"
+          fi
           if [ "$FORCE_DAILY" = "true" ]; then
-            echo "issue_date=$ISSUE" >> "$GITHUB_OUTPUT"
             echo "compose=daily" >> "$GITHUB_OUTPUT"
-          elif [ "$DOW" = "1" ]; then
-            if [ -z "${{ github.event.inputs.issue_date }}" ]; then
-              ISSUE=$(TZ=America/Los_Angeles date +%Y-%m-%d)
-            fi
-            echo "issue_date=$ISSUE" >> "$GITHUB_OUTPUT"
+          elif [ "$FORCE_WEEKLY" = "true" ]; then
             echo "compose=weekly" >> "$GITHUB_OUTPUT"
           else
-            echo "issue_date=$ISSUE" >> "$GITHUB_OUTPUT"
             echo "compose=none" >> "$GITHUB_OUTPUT"
           fi
+          echo "issue_date=$ISSUE" >> "$GITHUB_OUTPUT"
+          echo "extra_date=$EXTRA" >> "$GITHUB_OUTPUT"
       - name: Collect (Reddit + RSS)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -68,8 +77,11 @@ jobs:
           REDDIT_USER_AGENT: ${{ secrets.REDDIT_USER_AGENT }}
           NEWSLETTER_TIMEZONE: America/Los_Angeles
         run: |
-          echo "Issue date: ${{ steps.mode.outputs.issue_date }} (compose=${{ steps.mode.outputs.compose }})"
+          echo "Issue date: ${{ steps.mode.outputs.issue_date }} extra=${{ steps.mode.outputs.extra_date }} (compose=${{ steps.mode.outputs.compose }})"
           cd pipeline && python -m src.run_collect --date "${{ steps.mode.outputs.issue_date }}"
+          if [ -n "${{ steps.mode.outputs.extra_date }}" ]; then
+            python -m src.run_collect --date "${{ steps.mode.outputs.extra_date }}"
+          fi
       - name: Media batch (YouTube + podcasts)
         if: github.event.inputs.skip_media != 'true'
         env:
@@ -79,6 +91,9 @@ jobs:
           YOUTUBE_SKIP_WHISPER: "true"
         run: |
           cd pipeline && python -m src.run_media_batch --date "${{ steps.mode.outputs.issue_date }}" --all-teams --workers 6 --max-videos 2 --max-episodes 2
+          if [ -n "${{ steps.mode.outputs.extra_date }}" ]; then
+            python -m src.run_media_batch --date "${{ steps.mode.outputs.extra_date }}" --all-teams --workers 6 --max-videos 2 --max-episodes 2
+          fi
       - name: Camp signals (extract + aggregate + propose)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -87,7 +102,10 @@ jobs:
           NEWSLETTER_TIMEZONE: America/Los_Angeles
         run: |
           cd pipeline && python -m src.run_extract_camp_signals --date "${{ steps.mode.outputs.issue_date }}"
-      - name: Compose weekly (Monday week in review)
+          if [ -n "${{ steps.mode.outputs.extra_date }}" ]; then
+            python -m src.run_extract_camp_signals --date "${{ steps.mode.outputs.extra_date }}"
+          fi
+      - name: Compose weekly (manual backfill only)
         if: github.event.inputs.skip_compose != 'true' && steps.mode.outputs.compose == 'weekly'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -95,7 +113,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           NEWSLETTER_TIMEZONE: America/Los_Angeles
         run: |
-          cd pipeline && python -m src.run_compose_weekly --date "${{ steps.mode.outputs.issue_date }}"
+          cd pipeline && python -m src.run_compose_weekly --date "${{ steps.mode.outputs.issue_date }}" --force
       - name: Compose daily (all 32 teams -> in_review)
         if: github.event.inputs.skip_compose != 'true' && steps.mode.outputs.compose == 'daily'
         env:

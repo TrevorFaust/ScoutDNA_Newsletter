@@ -1,0 +1,93 @@
+---
+description: Editorial accuracy rules for ScoutDNA newsletter compose and review
+globs:
+  - pipeline/src/compose.py
+  - pipeline/src/extract_camp_signals.py
+  - pipeline/src/compose_context.py
+  - pipeline/src/weekly_input.py
+  - web/lib/wrapPlayerNames.tsx
+  - web/lib/nameRoleInference.ts
+  - web/lib/positions.ts
+  - web/lib/playerUsage.ts
+  - web/app/admin/usage/page.tsx
+alwaysApply: false
+---
+
+# Editorial accuracy (compose + chips)
+
+## Fantasy scope
+
+- Individual defensive players are **not** drafted in standard formats. Never say IDP draft stock, stash, or draft a DB/LB/DL.
+- Team DEF is the only defensive fantasy asset. Frame defender news as unit/scheme impact.
+- When you mention team DEF, assign a tier vs the rest of the league (elite / high / mid / streamer / avoid) using 2025 ranks plus 2026 SOS. Elite 2025 units (roughly top 8 yards or points) are worth spending an earlier pick even if ADP is late. Do not flatten every good defense into "late-round asset, no urgency."
+- Skip TE (or any skill) fantasy bullets that only restate “settled starter / no news.”
+
+## Depth charts
+
+- Before naming WR2/WR3/RB1 etc., check `fantasy_skill_depth` in compose context.
+- If a camp depth chart differs from curated depth, say so explicitly (“initial camp chart listed X ahead of Y”) — do not invent slot numbers that contradict curated depth without that framing.
+- Season-ending / IR: drop that player from live WR1/RB1 “in the mix” copy. Mention once as who inherits snaps. **Ricky Pearsall** is out for 2026; San Francisco WR1 is **Mike Evans** vs **De'Zhaun Stribling**.
+- Tampa RB: **Bucky Irving** is the likely RB1. **Kenneth Gainwell** was signed specifically as his complement (pass-game / change-of-pace), not as a challenger. Keep Gainwell in the Bucky fantasy so-what; do not treat him as a Pittsburgh leftover.
+
+## Uniform sections (every team)
+
+- Shape is always: **intro + Activity + Fantasy lens**. No separate Talk section.
+- Quotes and rumor beats that are new and meaningful go inside **Activity** (or the intro if they are the lead). Keep coach comments that name starters, clarify injuries, or change roles; do not drop them with Talk.
+- `talk_markdown` stays empty.
+- A story may appear in at most **two** of {intro, activity, fantasy}. Prefer intro + fantasy for major beats.
+- Fantasy = implication / so-what only, not a restatement of the news.
+- Bubble WR5 / retirement / deep depth: one mention max.
+- Never use em dashes (—) or en dashes (–) in prose.
+
+## Preseason
+
+- Cover who started, who sat, injuries, and first-team notes from reporting. Do not treat the PRE box as a workload study or a new depth chart.
+- Starters often play a series or do not play. Token carries/targets for a locked-in starter (Chase Brown, Breece Hall, etc.) are warmup, not a split or a role change.
+- Camp bodies and backups pad snaps while starters rest. Their leftover target/rush shares are expected noise, not “winning the job,” unless a coach, first-team reps, or the depth chart say otherwise.
+- When reporting already names a player’s preseason game, cite 1-2 counting stats from `skill_usage` on that player (catches, yards, TDs, pass attempts). Optional: that player’s target share as color. Do not invent the line. Do not dump unnamed box-score leaders.
+
+## Same-week follow-up
+
+- If a story earlier in the week implied a later event in that same week (will play Saturday, expected back Thursday, start the opener, injury to be evaluated), close the loop when later clusters or `skill_usage` show what happened.
+- Named play/sit previews apply to **every player on every team**, including backups and rookies (Ty Simpson). If a coach said they would play this week's preseason game and `skill_usage` has their box, write that they played and cite 1-2 counting stats in the same beat. Never leave “will play” / “confirmed to play” / “wants to play” in a week-in-review after the game.
+- Weekly `play_sit_payoffs` and `story_arcs` are required closers when present. Prefer the later fact (the line) as the closer.
+- Fold setup + payoff into **one** beat. Do not leave the midweek quote hanging as if the later event has not occurred.
+- Do not write “ahead of Saturday” in a Monday recap when Saturday’s game is already in the week’s inputs.
+- Do not invent snaps, pass attempts, or drive counts. Cite `skill_usage.snaps` / `pass_attempts`, or drive/sit details only when a later source says so.
+
+## Skill usage (nflverse / ESPN PRE fallback)
+
+- Cite only numbers from `skill_usage` / `game_box` / `latest_game` in compose context. Never invent target share, rush share, air-yards share, snaps, yards, or PPR.
+- If `skill_usage.window.season_type` is PRE: do not cite leftover camp-body shares as a job, committee, or WR1. Committee flags are omitted in PRE on purpose. When the news already names a player's game, cite 1-2 counting stats from `skill_usage` for that player. Snaps or pass_attempts **are** allowed as the closer on a same-week play/sit preview.
+- Regular season / POST: the week's game is the lead. Story is who scored fantasy points, how many (PPR), and the outlook. Named players do **not** need a counting line on every mention. Put the number in only when it earns its place:
+  - WR/TE: catches and receiving yards when relevant, plus `snap_pct` as the usage proxy (routes-run is not in `player_week_usage`).
+  - RB: rushing yards and carries; in split backfields add `snap_pct` and `rb_rush_share` (4 carries vs 12 is 25% of RB work).
+  - QB: passing yards (attempts/TDs/INTs as needed) plus rushing yards when it matters.
+  Then one insight from reporting (coverage, OL, game script, injury, snap share). Do not lead with camp speculation or 3rd/4th-string battles once a REG box exists. Meaningful snaps for a bubble player can be a flyer, not the main story.
+- Team DEF: at most one short beat from `latest_game` (points allowed, yards allowed, turnovers). Not a defensive recap. Do not invent a score.
+- Regular season: mention RB splits only when the lead is under ~45% of **RB** carries (`rb_rush_share`) or the #2 is at 25%+. An 80/20 room is not a committee.
+- Regular season: mention WR/TE target share when a player is at ~22%+ or two pass-catchers are within ~8 points.
+- Fantasy lens uses a number as proof of a role claim the news already supports, not a restated box-score recap.
+- Dual-threat fill-in QBs (Malik Willis and similar): boom-or-bust, not low-ceiling. Sparse full-game samples with rushing spike weeks are high ceiling / low floor / unproven. Do not flatten that into “streamer at best.”
+
+## Names & badges
+
+- Bold players, coaches/coordinators/GMs, and (when named) reporters.
+- Never bold non-person phrases (`QB battle`, `WR room`, etc.).
+- Free agents and waiver claims are still **players** by position. Never dump them into Other.
+- Other = reporters / beat writers / analysts / hosts only when clearly identified as such.
+- Badge color: **registry/DB position always wins**. Inference only fills unknown names, using the highest-confidence cue in the whole section (not “first weak token wins”).
+- Chip lookup is current roster/depth first, then recent `players` (2024+) and `player_week_usage`. Midseason adds (PUP, free agents, trades) still get a badge when they are in those tables even if nflverse `rosters_2026` has not caught up.
+- Team-scoped surnames: a last name in a team section must resolve to that club's player (Houston **Higgins** is Jayden Higgins, never Tee). Same-last-name players on other teams are not interchangeable.
+- Titles and possessives in bold (`**DC Al Golden's**`, `**OC Matt Nagy**`, `**RB LeQuint Allen Jr.**`) still chip the person. Prefer writing the title outside the stars (`DC **Al Golden**`) in new copy.
+- Do not expand a bare last name when the previous token is already that player's first name (`A.J. Brown` must not become `A.J. A.J. Brown`).
+- Never invent a player for a vague report ("a veteran Super Bowl-winning safety"). If the name is unknown, drop the story.
+- On first mention, put a position cue only when the name is not an obvious roster star (`CB **Keisean Nixon**`, `RG **Anthony Belton**`, or `**Keisean Nixon** (CB)`). Skip `(QB)` / `(RB)` / `(WR)` / `(TE)` after names everyone knows (`**Jordan Love**`, not `**Jordan Love** (QB)`). The UI already badges those from the registry.
+- Never invent stadium or venue names; prefer “training camp” / current official venue if known.
+- Never mash a player name into a franchise or venue (no “Malik Washington Commanders”, no “Paul Chase Brown Stadium”). Last names that match team cities stay as the franchise when the next word is the nickname.
+- Chipper stopwords: do not expand bare English words that collide with player names (`will`, `drew`, `young`, `large`, `rush`, `dart`, `battle`). Prefer full `**First Last**` on first mention. Re-read every sentence where a capitalized verb/noun could be a roster name before publishing.
+- Footnotes after bold Jr./Sr. names: never glue `**Name Jr.**¹`. Put a space (`**Name Jr.** ¹`) or the citation on the next word. CommonMark drops the bold when `**` follows a period and a superscript follows immediately.
+
+## Camp signals admin
+
+- Group pending proposals and recent signals **by team** so same-club items sit together.

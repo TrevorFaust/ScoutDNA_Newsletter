@@ -47,6 +47,7 @@ Rules:
 - Reddit/fan sources: max strength 2 unless multiple concrete practice details.
 - Skip generic team camp recaps with no player-specific direction.
 - Skip pure hype/conditioning pieces with no depth-chart signal entirely rather than force a direction.
+- PRESEASON / BACKUP SNAPS: in preseason games and mid/late camp, backups get heavy snaps while starters rest. A backup "looking good," stacking preseason stats, or dominating third-team periods is NOT direction:up on winning the job unless the item also reports first-team/starter reps, a coach naming them the leader, or an explicit depth-chart rise over a named rival. A locked-in starter's handful of warmup carries/targets is not a role signal. Prefer strength 1 neutral/projection (or skip) for pure preseason backup spotlight.
 - Match slot labels exactly from battles (WR2, RB1, etc.).
 
 Return ONLY JSON:

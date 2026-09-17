@@ -27,8 +27,8 @@ export default async function DailyPage() {
         <span className="edition-badge edition-daily">Daily Edition</span>
         <h1>Daily digest</h1>
         <p className="page-lead">
-          Tue–Sun mornings. League-wide opener plus all 32 team sections from the
-          prior 24 hours: activity, talk, and fantasy angles when the news supports
+          Every morning. League-wide opener plus all 32 team sections from the
+          prior 24 hours: activity and fantasy angles when the news supports
           them.
         </p>
         {latest && (

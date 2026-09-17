@@ -195,9 +195,18 @@ def score_signal_group(group: list[dict]) -> float:
 
 
 def compute_trend(scores_by_half: tuple[float, float]) -> str:
-    first_half, second_half = scores_by_half
-    if second_half >= first_half + 2:
+    """Trend from the *recent* half of the window.
+
+    Older vs newer half deltas were confusing in the admin UI: a player with a
+    large positive score from early-window buzz, then a quieter recent half,
+    showed as "falling." A player with early negative news and nothing recent
+    showed as "rising" (less bad ≠ rising).
+
+    Rising / falling now means recent half is clearly positive / negative.
+    """
+    _first_half, second_half = scores_by_half
+    if second_half >= 2:
         return "rising"
-    if second_half <= first_half - 2:
+    if second_half <= -2:
         return "falling"
     return "flat"

@@ -12,8 +12,51 @@ import { getTeamNameLexicon } from "@/lib/teams";
 
 const SUFFIX_TOKENS = new Set(["jr", "sr", "ii", "iii", "iv", "v"]);
 const TOKEN_RE = /^[A-Za-z][A-Za-z'’.-]*/;
-/** Football prose words that collide with player surnames (Miles/Jordan Battle). */
-const SURNAME_STOPWORDS = new Set(["battle", "battles"]);
+/**
+ * Football prose / English words that collide with player surnames.
+ * Bare tokens in this set never expand to a full player chip.
+ */
+const SURNAME_STOPWORDS = new Set([
+  "battle",
+  "battles",
+  "best",
+  "brown",
+  "dart",
+  "early",
+  "free",
+  "green",
+  "key",
+  "large",
+  "little",
+  "long",
+  "major",
+  "minor",
+  "power",
+  "rock",
+  "rush",
+  "short",
+  "stone",
+  "strong",
+  "young",
+]);
+/**
+ * Auxiliaries / verbs / common words that collide with player first names.
+ * Bare "will" / "drew" must not expand to Will Shipley / Drew Allar.
+ */
+const FIRST_NAME_STOPWORDS = new Set([
+  "bill",
+  "bob",
+  "can",
+  "drew",
+  "frank",
+  "grant",
+  "jack",
+  "mark",
+  "may",
+  "pat",
+  "ray",
+  "will",
+]);
 
 /** "J.J." / "AJ" / "A.J" all compact to "aj" so initialed names still match. */
 function tokenKey(token: string): string {
@@ -397,8 +440,17 @@ function matchAt(
       // "A.J. Brown" already wrote the first name; do not expand Brown to A.J. Brown.
       return null;
     }
-    // Bare "battle" is prose ("WR1 battle"), not Miles/Jordan Battle.
+    // Bare "battle" / "young" / "rush" is prose, not a player surname chip.
     if (SURNAME_STOPWORDS.has(key)) return null;
+    // "Ed Reed" must not render as "Ed Austin Reed" when only Austin Reed is known.
+    if (
+      prev &&
+      /^[A-Z]/.test(prev) &&
+      !SUFFIX_TOKENS.has(tokenKey(prev)) &&
+      !firstNameMatches(bySurname, prev)
+    ) {
+      return null;
+    }
     return {
       entry: bySurname,
       len: bareToken(token).length,
@@ -407,6 +459,24 @@ function matchAt(
   }
   const byFirst = matcher.firstNames.get(key);
   if (byFirst) {
+    // "will" / "drew" / lowercase auxiliaries are never player chips.
+    if (FIRST_NAME_STOPWORDS.has(key)) return null;
+    if (token[0] !== token[0].toUpperCase()) return null;
+    // "Adam Schefter" — next token is a different capitalized surname; do not
+    // expand bare Adam into Adam Randall.
+    const next = nextBareTokenAfter(text, i + bareToken(token).length);
+    if (next) {
+      const nextKey = tokenKey(next);
+      const playerSurname = surnameOf(byFirst);
+      if (
+        playerSurname &&
+        nextKey !== tokenKey(playerSurname) &&
+        !SUFFIX_TOKENS.has(nextKey) &&
+        /^[A-Z]/.test(next)
+      ) {
+        return null;
+      }
+    }
     return { entry: byFirst, len: bareToken(token).length, display: byFirst.displayName };
   }
   return null;

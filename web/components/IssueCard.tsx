@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cleanCopy, formatIssueDate, statusLabel, type IssueSummary } from "@/lib/issues";
+import { weeklyEditionLabel } from "@/lib/dates";
 
 type Props = {
   issue: IssueSummary;
@@ -15,7 +16,9 @@ export function IssueCard({ issue, teamSlug }: Props) {
     <article className="issue-card">
       <div className="issue-card-meta">
         <span className={`edition-badge edition-${issue.issue_type}`}>
-          {issue.issue_type === "weekly" ? "Weekly" : "Daily"}
+          {issue.issue_type === "weekly"
+            ? weeklyEditionLabel(issue.issue_date)
+            : "Daily"}
         </span>
         <time dateTime={issue.issue_date}>{formatIssueDate(issue.issue_date)}</time>
       </div>

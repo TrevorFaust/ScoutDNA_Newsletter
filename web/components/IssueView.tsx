@@ -8,6 +8,7 @@ import { PublishIssueForm } from "@/components/PublishIssueForm";
 import { ReferencesDropdown } from "@/components/ReferencesDropdown";
 import { TeamSectionBody } from "@/components/TeamSectionBody";
 import { cleanCopy } from "@/lib/cleanCopy";
+import { recapLabel } from "@/lib/dates";
 import { type AdjacentIssue } from "@/lib/issues";
 import { getDivisionGroups } from "@/lib/teams";
 import { hasPendingRumorFlag } from "@/lib/rumorTalk";
@@ -74,7 +75,8 @@ export function IssueView({
   }, [favoriteTeamSlug]);
 
   const editionHref = issueType === "weekly" ? "/weekly" : "/daily";
-  const editionLabel = issueType === "weekly" ? "Weekly" : "Daily";
+  const editionLabel =
+    issueType === "weekly" && issueDate ? recapLabel(issueDate) : issueType === "weekly" ? "Weekly" : "Daily";
   const canPublish =
     Boolean(issueId && issueDate) &&
     (status === "in_review" || status === "approved" || status === "draft");

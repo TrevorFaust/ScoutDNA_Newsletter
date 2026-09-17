@@ -42,7 +42,7 @@ export default function SignupPage() {
         <label>Frequency</label>
         <select value={frequency} onChange={(e) => setFrequency(e.target.value)}>
           <option value="daily">Daily</option>
-          <option value="weekly">Weekly (Monday)</option>
+          <option value="weekly">Weekly (Tuesday)</option>
           <option value="both">Both</option>
         </select>
         <button type="submit" className="btn">

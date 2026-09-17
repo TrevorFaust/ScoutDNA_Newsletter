@@ -50,7 +50,7 @@ export default async function HomePage() {
           <span className="edition-card-label">Daily Edition</span>
           <span className="edition-card-count">{dailyCount} issues</span>
           <p className="edition-card-desc">
-            Tue–Sun morning digest. League lens plus all 32 team sections from the
+            Every morning. League lens plus all 32 team sections from the
             prior 24 hours.
           </p>
           {latestDaily && (
@@ -59,11 +59,11 @@ export default async function HomePage() {
         </Link>
 
         <Link href="/weekly" className="edition-card edition-card-weekly">
-          <span className="edition-card-label">Weekly Edition</span>
+          <span className="edition-card-label">Week recaps</span>
           <span className="edition-card-count">{weeklyCount} issues</span>
           <p className="edition-card-desc">
-            Monday recap. The full week rolled into one issue: what moved, what was
-            said, what stuck.
+            Tuesday recap after Monday Night Football. Week 1 recap, Week 2
+            recap, and so on: who scored, how they were used, what is next.
           </p>
           {latestWeekly && (
             <span className="edition-card-latest">Latest: {latestWeekly.issue_date}</span>

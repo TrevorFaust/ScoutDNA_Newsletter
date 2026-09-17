@@ -3,8 +3,8 @@ import { IssueList } from "@/components/IssueList";
 import { fetchIssues, fetchLatestIssue } from "@/lib/issues";
 
 export const metadata = {
-  title: "Weekly Edition | ScoutDNA: All 32",
-  description: "Monday NFL week-in-review for all 32 teams.",
+  title: "Week recaps | ScoutDNA: All 32",
+  description: "Tuesday NFL week recaps for all 32 teams.",
 };
 
 export default async function WeeklyPage() {
@@ -24,12 +24,12 @@ export default async function WeeklyPage() {
       </nav>
 
       <header className="page-header">
-        <span className="edition-badge edition-weekly">Weekly Edition</span>
-        <h1>Week in review</h1>
+        <span className="edition-badge edition-weekly">Week recaps</span>
+        <h1>Week recaps</h1>
         <p className="page-lead">
-          Monday recaps. The prior calendar week compressed into one issue: what
-          moved across the league, team by team, with the same cited structure as
-          the daily digest.
+          Tuesday recaps after Monday Night Football, titled Week 1 recap, Week 2
+          recap, and so on. Boxes, what moved, team by team, with the same cited
+          structure as the daily digest.
         </p>
         {latest && (
           <Link href={`/issue/${latest.slug}`} className="btn btn-primary">
@@ -51,7 +51,7 @@ export default async function WeeklyPage() {
 
       <IssueList
         issues={issues}
-        emptyMessage="No weekly issues yet. Weekly compose runs on Mondays after the daily pipeline."
+        emptyMessage="No weekly issues yet. Week recaps compose on Tuesdays after the 3am PT nflverse sync."
       />
     </main>
   );

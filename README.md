@@ -2,7 +2,7 @@
 
 **Every team. Every day of collecting. One digest a week worth opening.**
 
-ScoutDNA: All 32 is a weekly NFL digest for people who draft skill players and still read the beat notes. Reddit threads, beat RSS, YouTube shows, and podcasts get collected every day. Compose runs on Monday: the prior Monday through Sunday rolled into one recap, all 32 franchises, plus a league opener. A one-off daily edition is there when a news day is too big to wait.
+ScoutDNA: All 32 is a weekly NFL digest for people who draft skill players and still read the beat notes. Reddit threads, beat RSS, YouTube shows, and podcasts get collected every day. Compose runs on Tuesday: the prior Tuesday through Monday rolled into one recap so Thursday-Monday games are in, all 32 franchises, plus a league opener. A one-off daily edition is there when a news day is too big to wait.
 
 You get what moved, who said it, and what it does to your roster, with a citation on the claim.
 
@@ -30,16 +30,16 @@ Collect → Cluster → Compose → Review → Publish
 ```
 
 1. **Collect.** Pulls a 24-hour window per team (team subs, r/nfl, ESPN RSS, optional YouTube transcripts and podcast show notes). Runs every day, all year. Camp-signal extraction and the nflverse refresh run on the same cadence.
-2. **Compose.** Clusters related items and writes the league opener plus each team block from those sources, with rumor flags built in. Monday only for the full 32-team draft, so Anthropic spend stays on the recap that matters.
+2. **Compose.** Clusters related items and writes the league opener plus each team block from those sources, with rumor flags built in. Tuesday only for the full 32-team draft (after the 3am usage sync), so Anthropic spend stays on the recap that matters.
 3. **Review.** Draft lands in `in_review`. Clear `review:rumor` flags team by team. Approve camp-battle proposals if the reporting earned a slot change.
 4. **Publish.** HTML on the Next.js site. After rumors clear, you can create **Substack and Reddit drafts** from the review page. Those are drafts only. Nothing posts live until you hit send yourself.
 
-Scheduled GitHub Actions (and/or a local Windows Task Scheduler job) run collect + media every day. Compose fires on Monday unless you override it.
+Scheduled GitHub Actions (and/or a local Windows Task Scheduler job) run collect + media every day. Compose fires on Tuesday after nflverse sync unless you override it.
 
 ### Live now (camp / preseason 2026)
 
 - **Uniform team shape.** Intro + Activity + Fantasy lens on every club. Talk is gone. Quotes that name a starter, injury, or role fold into Activity (or the intro if they are the lead).
-- **Skill usage.** nflverse weekly stats and snap counts sync into `player_week_usage`. Preseason falls back to ESPN box scores until nflverse publishes PRE rows. Compose may cite a number that is in that table. It does not invent snap share. `/admin/usage` is the board.
+- **Skill usage.** nflverse weekly stats and snap counts sync into `player_week_usage`. Game scores and yards allowed land in `team_week_results`. Regular-season compose leads with those boxes. `/admin/usage` is the board.
 - **Camp signals.** Daily extract → rolling slot scores → battle *proposals*. Nothing writes to `fantasy_position_battles` until you approve it at `/admin/camp-signals`.
 - **Rumor queue.** `/admin/rumors` lists editions with pending flags. `/admin/review/{slug}` is confirm / reject without reading the whole issue first.
 - **External drafts.** Review page can open a Substack draft and Reddit drafts aimed at each team subreddit. Flag: `EXTERNAL_DRAFTS_ENABLED`. Setup: [docs/EXTERNAL_DRAFTS.md](./docs/EXTERNAL_DRAFTS.md).
@@ -49,7 +49,7 @@ Scheduled GitHub Actions (and/or a local Windows Task Scheduler job) run collect
 
 ### Editor loop
 
-1. Monday draft hits `/admin/review/{slug}` (weekly slugs look like `2026-08-24-weekly`).
+1. Tuesday draft hits `/admin/review/{slug}` (weekly slugs look like `2026-09-22-weekly`).
 2. Clear rumors. Reject can strip or rewrite the beat; approve clears the badge.
 3. Check `/admin/usage` if a preseason line or snap share is about to go in copy.
 4. Check `/admin/camp-signals` if a WR2 or RB2 fight has enough days of the same direction to propose a settle.
@@ -140,9 +140,9 @@ Optional JSON/OAuth instead of RSS: create a [reddit.com/prefs/apps](https://www
 
 ### 5. Daily pipeline (automatic)
 
-Each morning the job **collects** and **ingests media**, every day, all year. It only **composes** a draft on **Mondays** (the weekly recap of the prior Monday through Sunday). Other days store raw items. The Monday issue lands in **`in_review`**.
+Each morning the job **collects** and **ingests media**, every day, all year. It **composes** a draft on **Tuesdays after the 3am PT nflverse sync** (Week N recap of the prior Tuesday through Monday, including Monday Night Football). Other days store raw items. The Tuesday issue lands in **`in_review`**.
 
-**Timing:** 1:00 AM Pacific the day after the collection date. Example: June 30 at 1am collects issue date `2026-06-29`. On a Monday morning, that same run also composes the weekly recap. Review at `/admin/review/2026-06-29-weekly`. Collect runs first; compose (Monday only) starts as soon as ingest finishes.
+**Timing:** 1:00 AM Pacific the day after the collection date. Example: June 30 at 1am collects issue date `2026-06-29`. Sunday issue dates are included (the old Monday hijack skipped them). On Tuesday morning, that 1am run also collects today so MNF talk is in; weekly compose waits for the 3am usage sync. Review at `/admin/review/2026-09-22-weekly`.
 
 **Windows Task Scheduler (this PC):**
 
@@ -154,13 +154,13 @@ cd "path\to\nfl_newsletter"
 Start-ScheduledTask -TaskName "ScoutDNA-daily-collect"
 ```
 
-Sources each run: **Reddit**, **ESPN RSS**, **YouTube** (all 32), **podcasts**, camp signal extraction, then **weekly compose, Mondays only**. Collect-only (never compose): `register_collect_task.ps1 -SkipCompose`.
+Sources each run: **Reddit**, **ESPN RSS**, **YouTube** (all 32), **podcasts**, camp signal extraction. **Weekly compose is Tuesday only**, after nflverse usage sync. Collect-only (never compose): `register_collect_task.ps1 -SkipCompose`.
 
 Want a one-off **daily** edition on a non-Monday (a trade, a starter named, a camp fight that broke)? Run `.\scripts\daily_collect.ps1 -DailyCompose`, or `.\scripts\compose.ps1 -Date 2026-06-30` against an already-collected date.
 
 Logs: `logs/daily_collect_YYYY-MM-DD.log`. Manual run: `.\scripts\daily_collect.ps1`.
 
-**GitHub Actions** backup (when this PC is off): `.github/workflows/collect.yml` collects daily, extracts camp signals, refreshes the battle proposal queue, and composes weekly (Monday only) by default. Pass `force_daily_compose: true` on a manual `workflow_dispatch` to get a full daily edition on any date. Secrets: `SUPABASE_*`, `REDDIT_USER_AGENT`, `ANTHROPIC_API_KEY`.
+**GitHub Actions** backup (when this PC is off): `.github/workflows/collect.yml` collects daily (including Sundays), extracts camp signals, and refreshes the battle proposal queue. `.github/workflows/sync_nflverse.yml` syncs boxes at 3am PT and composes weekly on Tuesday. Pass `force_daily_compose: true` on a manual collect `workflow_dispatch` to get a full daily edition on any date. Secrets: `SUPABASE_*`, `REDDIT_USER_AGENT`, `ANTHROPIC_API_KEY`.
 
 Daily nflverse sync is its own Action: `.github/workflows/sync_nflverse.yml`.
 
@@ -188,6 +188,6 @@ docs/              # Setup notes (YouTube, camp signals, external drafts, …)
 
 ## Roadmap
 
-- **Shipping:** Reddit + RSS + media collect, Monday weekly compose, review UI, HTML publish, team archives, usage board, camp-signal proposals, rumor queue, Substack/Reddit draft export
+- **Shipping:** Reddit + RSS + media collect, Tuesday weekly compose, review UI, HTML publish, team archives, usage board, camp-signal proposals, rumor queue, Substack/Reddit draft export
 - **Next:** Resend email, subscriber preferences
 - **Later:** Glossary tooltips, more media sources

@@ -137,7 +137,7 @@ Rebuilt nightly (or after each extract). One row per `(team_abbr, slot, player_n
 | `signal_count` | int | |
 | `up_count`, `down_count` | int | |
 | `last_signal_at` | timestamptz | |
-| `trend` | text | `rising` \| `falling` \| `flat` — compare recent half vs older half of window |
+| `trend` | text | `rising` \| `falling` \| `flat` — from the recent half of the window (recent score ≥ +2 / ≤ −2) |
 | `top_source_tier` | smallint | Best tier in window |
 | `updated_at` | timestamptz | |
 
@@ -342,10 +342,13 @@ Sum deduped group weights for `(team, slot, player)` over the window (default 7 
 
 ### Trend
 
-Split window in half by the representative signal's `content_date` per story group:
+Split window in half by the representative signal's `content_date` per story group. Trend uses the **recent** half only:
 
-- `rising`: second-half score ≥ first-half + 2
-- `falling`: second-half ≤ first-half − 2
+- `rising`: recent-half score ≥ +2
+- `falling`: recent-half score ≤ −2
+- `flat`: recent half between −2 and +2
+
+(Older vs newer deltas used to mark front-loaded positive buzz as "falling" and early negatives with a quiet recent half as "rising.")
 - else `flat`
 
 Rebuild `camp_slot_scores` after each extract run.

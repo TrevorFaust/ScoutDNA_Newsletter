@@ -78,12 +78,24 @@ header.site {
 }
 
 header.site a.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
   color: var(--text);
   text-decoration: none;
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 1.15rem;
   white-space: nowrap;
+}
+
+.brand-logo {
+  height: 2.75rem;
+  width: auto;
+  border-radius: 6px;
+  flex-shrink: 0;
+  background: #e6e3db;
+  object-fit: contain;
 }
 
 .brand-colon {

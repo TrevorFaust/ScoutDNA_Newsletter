@@ -105,32 +105,57 @@ def fetch_prior_issue_context(issue_date: date, *, max_snippets: int = 6) -> str
     joined = "\n---\n".join(parts[:max_snippets])
     return (
         "Yesterday's edition already covered the following. "
-        "Do NOT repeat unless inputs show a clear NEW development (injury update, new quote, etc.):\n"
+        "Do NOT repeat unless inputs show a clear NEW development (injury update, new quote, "
+        "the game/return/decision that the earlier story was waiting on). "
+        "If yesterday previewed a later event and today's inputs close it, write the follow-up:\n"
         f"{joined}"
     )
 
 
+def _fetch_raw_items_paginated(build_query) -> list[dict]:
+    """PostgREST caps a single execute at 1000 rows; page so weekly windows are complete."""
+    page = 1000
+    rows: list[dict] = []
+    start = 0
+    while True:
+        resp = build_query().range(start, start + page - 1).execute()
+        batch = resp.data or []
+        rows.extend(batch)
+        if len(batch) < page:
+            break
+        start += page
+    return rows
+
+
 def fetch_raw_items_for_date(content_date: date) -> list[dict]:
     sb = get_client()
-    resp = (
-        sb.table(RAW_ITEMS)
-        .select("*")
-        .eq("content_date", content_date.isoformat())
-        .execute()
-    )
-    return resp.data or []
+
+    def build_query():
+        return (
+            sb.table(RAW_ITEMS)
+            .select("*")
+            .eq("content_date", content_date.isoformat())
+            .order("content_date")
+            .order("url_hash")
+        )
+
+    return _fetch_raw_items_paginated(build_query)
 
 
 def fetch_raw_items_for_range(content_start: date, content_end: date) -> list[dict]:
     sb = get_client()
-    resp = (
-        sb.table(RAW_ITEMS)
-        .select("*")
-        .gte("content_date", content_start.isoformat())
-        .lte("content_date", content_end.isoformat())
-        .execute()
-    )
-    return resp.data or []
+
+    def build_query():
+        return (
+            sb.table(RAW_ITEMS)
+            .select("*")
+            .gte("content_date", content_start.isoformat())
+            .lte("content_date", content_end.isoformat())
+            .order("content_date")
+            .order("url_hash")
+        )
+
+    return _fetch_raw_items_paginated(build_query)
 
 
 def _issue_slug(issue_date: date, issue_type: str) -> str:
@@ -141,9 +166,9 @@ def _issue_slug(issue_date: date, issue_type: str) -> str:
 
 def _issue_title(issue_date: date, issue_type: str) -> str:
     if issue_type == "weekly":
-        from .weekly_window import week_label
+        from .weekly_window import recap_label
 
-        return f"ScoutDNA: All 32, Week in Review ({week_label(issue_date)})"
+        return f"ScoutDNA: All 32, {recap_label(issue_date)}"
     return f"ScoutDNA: All 32, {issue_date.strftime('%B %d, %Y')}"
 
 
@@ -196,9 +221,8 @@ def fetch_daily_issues_with_sections(issue_dates: list[date]) -> dict[str, dict]
 
 
 def fetch_prior_weekly_context(weekly_issue_date: date, *, max_snippets: int = 6) -> str:
-    """Prior Monday weekly edition — avoid repeating last week's recap themes."""
-    prev_monday = weekly_issue_date - timedelta(days=7)
-    prev_slug = _issue_slug(prev_monday, "weekly")
+    """Prior weekly edition — avoid repeating last week's recap themes."""
+    prev_slug = _issue_slug(weekly_issue_date - timedelta(days=7), "weekly")
     sb = get_client()
     prev = (
         sb.table(ISSUES)
@@ -208,6 +232,16 @@ def fetch_prior_weekly_context(weekly_issue_date: date, *, max_snippets: int = 6
         .limit(1)
         .execute()
     )
+    if not prev.data:
+        prev = (
+            sb.table(ISSUES)
+            .select("id, league_section")
+            .eq("issue_type", "weekly")
+            .lt("issue_date", weekly_issue_date.isoformat())
+            .order("issue_date", desc=True)
+            .limit(1)
+            .execute()
+        )
     if not prev.data:
         return ""
     row = prev.data[0]

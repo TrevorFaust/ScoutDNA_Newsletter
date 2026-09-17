@@ -15,6 +15,8 @@ import pyarrow.parquet as pq
 
 from .config import ROOT
 from .db import get_client
+from .sync_player_usage import sync_player_usage
+from .sync_team_games import sync_team_week_results
 
 ROSTER_URL = "https://github.com/nflverse/nflverse-data/releases/download/rosters/roster_2026.parquet"
 DEPTH_URL = "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.parquet"
@@ -203,9 +205,14 @@ def main() -> None:
     parser.add_argument("--depth-only", action="store_true")
     parser.add_argument("--coaching-only", action="store_true")
     parser.add_argument("--draft-only", action="store_true")
+    parser.add_argument("--usage-only", action="store_true")
     args = parser.parse_args()
     all_default = not (
-        args.rosters_only or args.depth_only or args.coaching_only or args.draft_only
+        args.rosters_only
+        or args.depth_only
+        or args.coaching_only
+        or args.draft_only
+        or args.usage_only
     )
 
     if all_default or args.coaching_only:
@@ -216,6 +223,11 @@ def main() -> None:
         print(f"Depth charts: {sync_depth_charts()} rows")
     if all_default or args.draft_only:
         print(f"Draft picks: {sync_draft_picks()} rows")
+    if all_default or args.usage_only:
+        usage = sync_player_usage()
+        for key, n in usage.items():
+            print(f"Player usage {key}: {n} rows")
+        print(f"Team week results: {sync_team_week_results()} rows")
 
 
 if __name__ == "__main__":

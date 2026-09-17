@@ -1,5 +1,5 @@
 param(
-    [string]$Time = "07:00"
+    [string]$Time = "03:00"
 )
 
 $Root = Split-Path $PSScriptRoot -Parent
@@ -14,7 +14,7 @@ if (-not (Test-Path $SyncScript)) {
 $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -File `"$SyncScript`""
 $Trigger = New-ScheduledTaskTrigger -Daily -At $Time
 
-Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Description "Daily nflverse roster/depth/coaching sync for ScoutDNA newsletter" -Force | Out-Null
+Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Description "3am PT nflverse roster/depth/usage/games sync; Tuesday also composes the weekly recap." -Force | Out-Null
 
 Write-Host "Registered scheduled task '$TaskName' daily at $Time."
 Write-Host "Test now: Start-ScheduledTask -TaskName '$TaskName'"

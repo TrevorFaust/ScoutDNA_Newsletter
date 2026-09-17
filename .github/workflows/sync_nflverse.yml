@@ -2,22 +2,60 @@ name: Daily nflverse sync
 
 on:
   schedule:
-    # 7:00 AM Pacific ≈ 14:00 UTC (PDT)
-    - cron: "0 14 * * *"
+    # 3:00 AM Pacific ≈ 10:00 UTC (PDT). Syncs boxes, then Tuesday composes the weekly recap.
+    - cron: "0 10 * * *"
   workflow_dispatch:
+    inputs:
+      skip_compose:
+        description: Skip Tuesday weekly compose
+        type: boolean
+        default: false
+      force_weekly_compose:
+        description: Compose weekly even if today is not Tuesday (uses today's PT date)
+        type: boolean
+        default: false
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install dependencies
         run: pip install -r pipeline/requirements.txt
-      - name: Sync rosters, depth charts, coaching
+      - name: Resolve Tuesday compose
+        id: weekly
+        run: |
+          DOW=$(TZ=America/Los_Angeles date +%u)
+          TODAY=$(TZ=America/Los_Angeles date +%Y-%m-%d)
+          FORCE="${{ github.event.inputs.force_weekly_compose }}"
+          SKIP="${{ github.event.inputs.skip_compose }}"
+          echo "issue_date=$TODAY" >> "$GITHUB_OUTPUT"
+          if [ "$SKIP" = "true" ]; then
+            echo "compose=none" >> "$GITHUB_OUTPUT"
+          elif [ "$FORCE" = "true" ] || [ "$DOW" = "2" ]; then
+            echo "compose=weekly" >> "$GITHUB_OUTPUT"
+          else
+            echo "compose=none" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Sync rosters, depth charts, coaching, usage, team results
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: cd pipeline && python -m src.run_sync_nflverse
+      - name: Compose weekly (Tuesday week recap)
+        if: github.event.inputs.skip_compose != 'true' && steps.weekly.outputs.compose == 'weekly'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NEWSLETTER_TIMEZONE: America/Los_Angeles
+        run: |
+          FORCE_FLAG=""
+          if [ "${{ github.event.inputs.force_weekly_compose }}" = "true" ]; then
+            FORCE_FLAG="--force"
+          fi
+          cd pipeline && python -m src.run_compose_weekly --date "${{ steps.weekly.outputs.issue_date }}" $FORCE_FLAG
