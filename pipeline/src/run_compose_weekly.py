@@ -5,7 +5,12 @@ from datetime import date, datetime
 
 import anthropic
 
-from .compose import compose_issue_weekly, compose_team_section_weekly
+from .compose import (
+    compose_issue_weekly,
+    compose_team_section_weekly,
+    find_internal_flag_leaks,
+    scrub_internal_flag_names,
+)
 from .config import TZ
 from .db import get_client
 from .storage import (
@@ -138,13 +143,23 @@ def main() -> None:
             team_id = slug_to_id.get(sec["team_slug"])
             if not team_id:
                 continue
+            # Final pass: scrub snake_case flag leaks before review.
+            for key in (
+                "intro_paragraphs",
+                "rookie_paragraph",
+                "activity_markdown",
+                "fantasy_markdown",
+            ):
+                val = sec.get(key)
+                if isinstance(val, str) and val:
+                    sec[key] = scrub_internal_flag_names(val)
             sb_sections.append(
                 {
                     "team_id": team_id,
                     "intro_paragraphs": sec.get("intro_paragraphs"),
-                    "rookie_paragraph": sec.get("rookie_paragraph"),
-                    "activity_markdown": sec.get("activity_markdown"),
-                    "talk_markdown": sec.get("talk_markdown"),
+                    "rookie_paragraph": "",
+                    "activity_markdown": "",
+                    "talk_markdown": "",
                     "fantasy_markdown": sec.get("fantasy_markdown"),
                     "footnotes": sec.get("footnotes", []),
                     "tags": sec.get("tags", []),
@@ -153,6 +168,28 @@ def main() -> None:
                     "empty_reason": sec.get("empty_reason"),
                     "sort_order": sec["sort_order"],
                 }
+            )
+
+        if league_text:
+            league_text = scrub_internal_flag_names(league_text)
+
+        leak_hits: list[str] = []
+        for sec in sb_sections:
+            abr = next(
+                (s for s, tid in slug_to_id.items() if tid == sec["team_id"]),
+                sec["team_id"],
+            )
+            for key in ("intro_paragraphs", "fantasy_markdown"):
+                val = sec.get(key) or ""
+                for tok in find_internal_flag_leaks(val):
+                    leak_hits.append(f"{abr}.{key}:{tok}")
+        if league_text:
+            for tok in find_internal_flag_leaks(league_text):
+                leak_hits.append(f"league:{tok}")
+        if leak_hits:
+            raise RuntimeError(
+                "Internal snake_case tokens leaked into weekly prose before review: "
+                + ", ".join(leak_hits[:20])
             )
 
         issue_update: dict = {"status": "in_review"}

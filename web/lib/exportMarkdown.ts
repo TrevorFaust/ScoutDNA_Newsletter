@@ -54,29 +54,8 @@ function formatReferences(footnotes: Footnote[]): string {
 function hasExportableContent(section: ExportSection): boolean {
   return (
     usableField(section.intro_paragraphs) ||
-    usableField(section.rookie_paragraph) ||
-    usableField(section.activity_markdown) ||
-    usableField(section.talk_markdown) ||
     usableField(section.fantasy_markdown)
   );
-}
-
-/**
- * Activity display matches the site: prefer activity; if empty, fold legacy talk
- * and retitle Talk → Activity.
- */
-function activityForExport(
-  section: ExportSection,
-  keepHeadings: boolean
-): string | null {
-  if (usableField(section.activity_markdown)) {
-    return normalizeBody(section.activity_markdown!, { keepHeadings });
-  }
-  if (!usableField(section.talk_markdown)) return null;
-  const talk = normalizeBody(section.talk_markdown!, { keepHeadings });
-  return talk
-    .replace(/^#{1,6}\s*Talk\s*$/gim, keepHeadings ? "### Activity" : "Activity")
-    .trim();
 }
 
 /** Team section for Reddit drafts (plain text, no site badges/tags). */
@@ -92,13 +71,6 @@ export function exportTeamMarkdown(
   if (usableField(section.intro_paragraphs)) {
     parts.push(normalizeBody(section.intro_paragraphs!));
   }
-  if (usableField(section.rookie_paragraph)) {
-    parts.push("Rookies & camp additions");
-    parts.push(normalizeBody(section.rookie_paragraph!));
-  }
-
-  const activity = activityForExport(section, false);
-  if (activity) parts.push(activity);
 
   if (usableField(section.fantasy_markdown)) {
     parts.push(normalizeBody(section.fantasy_markdown!));
@@ -119,7 +91,7 @@ export function exportTeamMarkdown(
 
 /**
  * One team block shaped like the weekly issue page:
- * bold team H2, intro, optional rookies, Activity, Fantasy lens, references.
+ * bold team H2, intro, Fantasy lens, references.
  */
 export function exportTeamEditionMarkdown(section: ExportSection): string | null {
   if (section.is_empty && !hasExportableContent(section)) return null;
@@ -130,15 +102,6 @@ export function exportTeamEditionMarkdown(section: ExportSection): string | null
   if (usableField(section.intro_paragraphs)) {
     parts.push(normalizeBody(section.intro_paragraphs!, { keepHeadings: true }));
   }
-  if (usableField(section.rookie_paragraph)) {
-    parts.push("### Rookies & camp additions");
-    parts.push(
-      normalizeBody(section.rookie_paragraph!, { keepHeadings: true })
-    );
-  }
-
-  const activity = activityForExport(section, true);
-  if (activity) parts.push(activity);
 
   if (usableField(section.fantasy_markdown)) {
     parts.push(

@@ -24,21 +24,12 @@ export function TeamSectionBody({
   teamAbbr,
 }: Props) {
   const intro = cleanField(section.intro_paragraphs);
-  const rookie = cleanField(section.rookie_paragraph);
-  const activity = cleanField(section.activity_markdown);
   const fantasy = cleanField(section.fantasy_markdown);
 
-  // Talk is retired: fold any legacy talk into activity display only if activity is empty.
-  const legacyTalk = cleanField(section.talk_markdown);
-  const activityOrTalk =
-    activity ??
-    (legacyTalk
-      ? legacyTalk.replace(/^#{1,6}\s*Talk\s*$/gim, "### Activity").trim()
-      : null);
-
-  const sectionContext = [intro, rookie, activityOrTalk, fantasy]
-    .filter(Boolean)
-    .join("\n\n");
+  // Rookie notes and Activity are retired for in-season editions: fantasy-first
+  // shape is intro + Fantasy lens only. Keep unused fields out of the matcher
+  // context so stale Activity copy cannot drive chips.
+  const sectionContext = [intro, fantasy].filter(Boolean).join("\n\n");
   const footnotes = (section.footnotes ?? []).filter((f) => f.label?.trim() || f.url?.trim());
 
   const lookup = useMemo(
@@ -68,23 +59,6 @@ export function TeamSectionBody({
       {intro && (
         <MarkdownBlock
           content={intro}
-          sharedMatcher={sharedMatcher}
-          contextText={sectionContext}
-        />
-      )}
-      {rookie && (
-        <>
-          <h3>Rookies & camp additions</h3>
-          <MarkdownBlock
-            content={rookie}
-            sharedMatcher={sharedMatcher}
-            contextText={sectionContext}
-          />
-        </>
-      )}
-      {activityOrTalk && (
-        <MarkdownBlock
-          content={activityOrTalk}
           sharedMatcher={sharedMatcher}
           contextText={sectionContext}
         />

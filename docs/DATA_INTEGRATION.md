@@ -49,6 +49,13 @@ See **[POSTGRES_SETUP.md](./POSTGRES_SETUP.md)** for shared-database setup.
 
 Until wired, expand `data/season_context.json` team-by-team as you verify facts.
 
+## Injury status (ESPN)
+
+- Sync: `.\scripts\sync_injuries.ps1` (also runs automatically at the start of `compose_weekly.ps1`).
+- Table: `player_injury_status` from ESPN's public injuries API ([espn.com/nfl/injuries](https://www.espn.com/nfl/injuries)).
+- Compose gets `injury_status` per team (QB/RB/WR/TE only): status, injury type, return_date, and short notes that often explain in-game exits and next-week availability.
+- Official pregame practice sheets remain on [nfl.com/injuries](https://www.nfl.com/injuries/) (`/league/{season}/reg{N}`); ESPN is the primary structured feed for now.
+
 ## Skill position battles (QB / RB / WR / TE)
 
 **Problem:** `fantasy_team_depth` lists WR1–WR4 order but does not say *which slot is contested*. Steelers may fight over WR3; Dolphins over WR1; Broncos over WR1 between two studs.

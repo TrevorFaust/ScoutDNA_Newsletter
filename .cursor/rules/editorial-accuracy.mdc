@@ -31,13 +31,17 @@ alwaysApply: false
 
 ## Uniform sections (every team)
 
-- Shape is always: **intro + Activity + Fantasy lens**. No separate Talk section.
-- Quotes and rumor beats that are new and meaningful go inside **Activity** (or the intro if they are the lead). Keep coach comments that name starters, clarify injuries, or change roles; do not drop them with Talk.
+- Daily/camp shape: **intro + Activity + Fantasy lens**. No separate Talk section.
+- REG/POST weekly shape: **intro + Fantasy lens only**. `activity_markdown` and `rookie_paragraph` stay empty. Quotes and injury timelines fold into the intro.
 - `talk_markdown` stays empty.
-- A story may appear in at most **two** of {intro, activity, fantasy}. Prefer intro + fantasy for major beats.
-- Fantasy = implication / so-what only, not a restatement of the news.
+- A story may appear in at most **two** of {intro, activity, fantasy} on daily/camp; weekly REG prefers intro + fantasy only.
+- Fantasy = implication / PPR stakes / so-what, not a restatement of the news. Write with zest when a star goes nuclear on TNF/MNF.
+- Pronouns: default **he/him** for players and coaches. Never she/her for Tee Higgins, DeVonta Smith, etc.
+- Injuries: pregame inactive/DNP, in-game exits that change usage, and postgame day-to-day/IR/miss-time belong in the same beat as quiet lines. Prefer `injury_status` (ESPN board synced into compose context) over inventing play-by-play.
+- Committees: optional short usage table (snaps / carries or targets / PPR) under Fantasy when the room is split.
 - Bubble WR5 / retirement / deep depth: one mention max.
 - Never use em dashes (—) or en dashes (–) in prose.
+- Never paste snake_case field names (`rb_rush_share`, `split_backfield`, etc.). Translate to plain English. Pre-review must reject leftover leaks.
 
 ## Preseason
 
@@ -79,7 +83,7 @@ alwaysApply: false
 - Badge color: **registry/DB position always wins**. Inference only fills unknown names, using the highest-confidence cue in the whole section (not “first weak token wins”).
 - Chip lookup is current roster/depth first, then recent `players` (2024+) and `player_week_usage`. Midseason adds (PUP, free agents, trades) still get a badge when they are in those tables even if nflverse `rosters_2026` has not caught up.
 - Team-scoped surnames: a last name in a team section must resolve to that club's player (Houston **Higgins** is Jayden Higgins, never Tee). Same-last-name players on other teams are not interchangeable.
-- Titles and possessives in bold (`**DC Al Golden's**`, `**OC Matt Nagy**`, `**RB LeQuint Allen Jr.**`) still chip the person. Prefer writing the title outside the stars (`DC **Al Golden**`) in new copy.
+- Titles and possessives in bold (`**DC Al Golden's**`, `**OC Matt Nagy**`, `**RB LeQuint Allen Jr.**`) still chip the person. Prefer writing the title outside the stars (`DC **Al Golden**`, `DC **Anthony Weaver**`) in new copy so staff badges correctly.
 - Do not expand a bare last name when the previous token is already that player's first name (`A.J. Brown` must not become `A.J. A.J. Brown`).
 - Never invent a player for a vague report ("a veteran Super Bowl-winning safety"). If the name is unknown, drop the story.
 - On first mention, put a position cue only when the name is not an obvious roster star (`CB **Keisean Nixon**`, `RG **Anthony Belton**`, or `**Keisean Nixon** (CB)`). Skip `(QB)` / `(RB)` / `(WR)` / `(TE)` after names everyone knows (`**Jordan Love**`, not `**Jordan Love** (QB)`). The UI already badges those from the registry.
@@ -87,6 +91,13 @@ alwaysApply: false
 - Never mash a player name into a franchise or venue (no “Malik Washington Commanders”, no “Paul Chase Brown Stadium”). Last names that match team cities stay as the franchise when the next word is the nickname.
 - Chipper stopwords: do not expand bare English words that collide with player names (`will`, `drew`, `young`, `large`, `rush`, `dart`, `battle`). Prefer full `**First Last**` on first mention. Re-read every sentence where a capitalized verb/noun could be a roster name before publishing.
 - Footnotes after bold Jr./Sr. names: never glue `**Name Jr.**¹`. Put a space (`**Name Jr.** ¹`) or the citation on the next word. CommonMark drops the bold when `**` follows a period and a superscript follows immediately.
+- Never paste internal flag/snake_case field names into reader prose (`rb_rush_share`, `wr_target_split`, `split_backfield`, `te_featured`). Translate to plain English.
+- Parenthetical counting stats (`targets (6)`, `yards (83)`) stay Arabic. Footnote markers are Unicode superscripts only.
+
+## Rookie notes (in-season)
+
+- REG/POST weekly: leave `rookie_paragraph` empty. Fold any rookie game impact into intro/Fantasy.
+- Camp/preseason daily editions may still spotlight rookies when they have real news.
 
 ## Camp signals admin
 

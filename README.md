@@ -40,6 +40,7 @@ Scheduled GitHub Actions (and/or a local Windows Task Scheduler job) run collect
 
 - **Uniform team shape.** Intro + Activity + Fantasy lens on every club. Talk is gone. Quotes that name a starter, injury, or role fold into Activity (or the intro if they are the lead).
 - **Skill usage.** nflverse weekly stats and snap counts sync into `player_week_usage`. Game scores and yards allowed land in `team_week_results`. Regular-season compose leads with those boxes. `/admin/usage` is the board.
+- **Injuries.** ESPN's injury board syncs into `player_injury_status` (`.\scripts\sync_injuries.ps1`, also before weekly compose) and feeds `injury_status` into team prompts for Week N exits and Week N+1 availability.
 - **Camp signals.** Daily extract → rolling slot scores → battle *proposals*. Nothing writes to `fantasy_position_battles` until you approve it at `/admin/camp-signals`.
 - **Rumor queue.** `/admin/rumors` lists editions with pending flags. `/admin/review/{slug}` is confirm / reject without reading the whole issue first.
 - **External drafts.** Review page can open a Substack draft and Reddit drafts aimed at each team subreddit. Flag: `EXTERNAL_DRAFTS_ENABLED`. Setup: [docs/EXTERNAL_DRAFTS.md](./docs/EXTERNAL_DRAFTS.md).

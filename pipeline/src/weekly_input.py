@@ -14,7 +14,12 @@ from collections import defaultdict
 from datetime import date
 from typing import Any
 
-from .compose_context import latest_team_game, latest_week_usage_players, skill_player_names
+from .compose_context import (
+    _fetch_skill_injuries,
+    latest_team_game,
+    latest_week_usage_players,
+    skill_player_names,
+)
 from .dedupe import cluster_items
 from .league_feed import cluster_league_feed, extract_league_feed_items
 from .storage import fetch_raw_items_for_range
@@ -519,6 +524,8 @@ def build_team_weekly_input(
     for cluster in topic_clusters:
         cluster.pop("content_dates", None)
 
+    injuries = _fetch_skill_injuries(team.abbrev.upper())
+
     out: dict[str, Any] = {
         "team_slug": team.slug,
         "week_label": recap_label(weekly_issue_date),
@@ -530,6 +537,8 @@ def build_team_weekly_input(
         out["story_arcs"] = story_arcs
     if play_sit_payoffs:
         out["play_sit_payoffs"] = play_sit_payoffs
+    if injuries:
+        out["injury_status"] = injuries
     return out
 
 

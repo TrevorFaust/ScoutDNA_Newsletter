@@ -51,8 +51,45 @@ def strip_star_position_parens(text: str) -> str:
     return _SKILL_POS_PAREN_RE.sub(r"\1", text)
 
 
+_INTERNAL_FLAG_REPLACEMENTS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\brb_rush_share\b", re.I), "RB rush share"),
+    (re.compile(r"\brush_share\b", re.I), "rush share"),
+    (re.compile(r"\btarget_share\b", re.I), "target share"),
+    (re.compile(r"\bair_yards_share\b", re.I), "air yards share"),
+    (re.compile(r"\btouch_share\b", re.I), "touch share"),
+    (re.compile(r"\bsnap_pct\b", re.I), "snap share"),
+    (re.compile(r"\bwr_target_split\b", re.I), "receiver target split"),
+    (re.compile(r"\bsplit_backfield\b", re.I), "split backfield"),
+    (re.compile(r"\bte_featured\b", re.I), "featured tight end usage"),
+    (re.compile(r"\bfantasy_skill_depth\b", re.I), "fantasy depth chart"),
+    (re.compile(r"\bskill_position_battles\b", re.I), "position battles"),
+    (re.compile(r"\btarget_leader\b", re.I), "target leader"),
+]
+
+_SNAKE_LEAK_RE = re.compile(r"\b[a-z]+(?:_[a-z0-9]+)+\b")
+
+
+def scrub_internal_flag_names(text: str) -> str:
+    """Translate leaked snake_case field/flag names into plain English."""
+    if not text:
+        return text
+    out = text
+    for pat, repl in _INTERNAL_FLAG_REPLACEMENTS:
+        out = pat.sub(repl, out)
+    return out
+
+
+def find_internal_flag_leaks(text: str) -> list[str]:
+    """Return leftover snake_case tokens that should never ship to readers."""
+    if not text:
+        return []
+    return sorted({m.group(0) for m in _SNAKE_LEAK_RE.finditer(text)})
+
+
 def _clean_prose(text: str) -> str:
-    return strip_star_position_parens(strip_prose_dashes(text))
+    return scrub_internal_flag_names(
+        strip_star_position_parens(strip_prose_dashes(text))
+    )
 
 
 def _sanitize_footnotes(footnotes: object) -> object:
@@ -79,8 +116,10 @@ STYLE_RULES = """
 Writing style:
 - Use normal sentences. NEVER use em dashes (—) or en dashes (–) anywhere in prose. Use commas, periods, colons, or parentheses instead. This is a hard ban.
 - Never use square brackets for asides like [Inference: ...].
-- News blocks (intro, rookies, activity) stay factual. Put ALL dynasty/redraft angles in fantasy_markdown only (no "Fantasy take:" prefix).
-- You may infer role/usage from coach quotes or camp buzz without saying "depth chart" every time.
+- Intro stays factual but not flat: lead with the game, name PPR when it matters, and let stakes land. Put ALL dynasty/redraft angles in fantasy_markdown only (no "Fantasy take:" prefix).
+- Pronouns (hard): NFL players, coaches, coordinators, and GMs are almost always men. Default to he/him/his. Never write she/her for a player or coach unless the source is clearly about a woman (usually a reporter). Tee Higgins, DeVonta Smith, Ja'Marr Chase, etc. are he.
+- You may infer role/usage from coach quotes, injury exits, or camp buzz without saying "depth chart" every time. Do NOT invent play-by-play. If reporting names an early fumble, in-game exit, or inactive that explains a snap swing, use that; otherwise stick to box + injury/news.
+- Injury context (hard): when a quiet line or snap collapse is injury-driven, say so. Cover (a) pregame injury report / inactive / DNP, (b) in-game exit that changed usage, (c) postgame day-to-day / IR / miss-time follow-up. Prefer injury_status (ESPN board in compose context) and reporting; do not invent play-by-play. Missing from the box is not "unclear usage"; if inactive lists or reports say Out, write Out.
 - Names: bold every player (including free agents / waiver claims), every coach/coordinator/GM, and named reporters when they are the source: **Aaron Rodgers**, **Germie Bernard**, **Mike McCarthy**, **Omar Khan**, **Adam Schefter**. Free agents stay players by position (e.g. free agent WR **Stefon Diggs**). Reporters are not players or coaches. The UI chips players by position, coaches in staff color, and media as Other. NEVER bold non-person phrases (no **QB battle**, **WR room**, **Fantasy lens**, **depth chart**). Position cues: skip them for obvious skill-position stars the registry will badge (no **Jordan Love** (QB), no QB **Josh Allen**). For lesser-known players, OL/DEF/specialists, and new adds, put a short cue: CB **Keisean Nixon**, RG **Anthony Belton**, or **Keisean Nixon** (CB). Never write (QB1), (RB2), (WR3).
 - Experience/years: player_experience in context is for accuracy only ,  do NOT label every player. Default: name + position only. Say rookie only for true rookies (years_exp=0) when it matters to the story. Say second-year only when the piece is about year-two breakout/development. Say veteran or career length only for outliers (e.g. 15+ year QB on a short deal) and at most once per player per section. Never repeat "22-year veteran" for the same QB daily. Wrong labels forbidden: years_exp=1 is second year, not first year.
 - Venues: never invent or mash stadium names (no "Paul Chase Brown Stadium"). Prefer "training camp" / "padded practices" unless the input states the current official venue.
@@ -89,24 +128,25 @@ Writing style:
 - Unnamed players: if a report does not name the player ("a veteran Super Bowl-winning safety"), omit the story. Do not invent a name and do not keep the anonymous blurb.
 - Titles in bold: write DC **Al Golden**, OC **Matt Nagy**, RB **LeQuint Allen Jr.** (title outside the stars). Never **DC Al Golden's** or **OC Matt Nagy** as a single bold span.
 - Depth labels MUST match fantasy_skill_depth before you write WR2/WR3/RB1 etc. If Pittman is WR2 and Wilson is WR4 in fantasy_skill_depth, do not say Wilson is ahead of Pittman "at WR3." When a team's published camp depth chart differs from fantasy_skill_depth, say that explicitly ("camp depth chart listed X ahead of Y") and keep the curated ranks straight.
-- rookie_paragraph: news-driven only ,  do NOT list the full draft class. Lead with skill-position rookies (QB/RB/WR/TE) when inputs have updates. Also include when inputs mention: (a) OL rookies (including from draft_capital_2026 / depth_chart_ol_def), especially early-round picks or line shuffles ,  frame how the addition affects run/pass for skill players, not as a stash; (b) rounds 6-7 picks or UDFAs who keep popping up as camp standouts, mini-camp darlings, or fan-buzz names (they may never make the roster ,  frame as camp story, not stash advice). Prefer OL over IDP for these dartling mentions; note a DEF camp darling only when multiple inputs flag the same name or a clear trend. If no rookie/UDFA has news, set rookie_paragraph to empty string. Use draft_capital_2026 for round/pick when citing draft capital (never invent; never use round 0).
+- rookie_paragraph: REG/POST weekly editions return empty string "". Fold any rookie game impact into intro or fantasy. Preseason/camp daily editions may still cover skill/OL rookies and repeating camp darlings (R6-7/UDFA buzz). Never invent draft capital; use draft_capital_2026 (never round 0). Never dump the full draft class.
 - skill_position_battles + fantasy_skill_depth: skill_position_battles is background for which slots are up for grabs (QB/RB/WR/TE). Mention a battle only when today's inputs discuss that player, role, or competition ,  or one brief orienting clause where it helps (not a full depth-chart recap). status=contested → name relevant candidates when news touches that battle; status=open → frame as unclear alpha/slot; status=settled → do not invent competition. Named settled complements still belong in the starter's fantasy so-what when the note says they were signed/kept as a complement (e.g. Gainwell behind Irving). Season-ending / IR: drop that player from live contested mix. Do not write them as WR1 "also in the mix." Mention once as who inherits snaps (Ricky Pearsall is out for 2026; SF WR1 is Evans vs Stribling). Slot labels cascade: losers from a contested/open battle fill the next depth slot implicitly (note often says "losers slot WR3") ,  gaps in numbering are intentional (e.g. NYG WR2 battle then WR4 bubble means WR3 is cascade fallout, not a separate camp fight). Only treat a lower slot as its own battle when candidates[] adds players not already fighting above. Examples: PIT WR3 contested (Bernard vs Wilson); MIA WR1 open; DEN WR1 contested Sutton vs Waddle with WR3 fight below. fantasy_skill_depth shows depth-chart order only ,  it does not define which slot is contested. When camp news hits a position, use battles + depth together; never crown a winner without source support.
 - Never tell readers to draft or stash individual OL, DL, LB, CB, S, nickel, or any IDP role. Never write "IDP-relevant," "IDP leagues," or individual defensive draft stock. Nickel is a coverage/sub-package DB ,  same as CB/S for fantasy (not draftable). Team DEF is the only defensive fantasy asset. When you mention it, give it a tier vs the rest of the league (elite / high / mid / streamer / avoid) from team_stats_2025 ranks plus sos_2026. Elite 2025 units (roughly top 8 in yards or points allowed) are worth an earlier pick even if they still go late in many drafts; say that. Do not flatten every good defense into "late-round asset worth consideration" with no urgency. Occasional note that a starter injury softens team DEF early is OK; do not treat defenders as draftable players.
 - OL news belongs in the section when inputs mention it: first-round picks, starting-guard/tackle competition, notable camp reps, or coordinator/HC comments on the front. Keep it brief in intro/rookie_paragraph/activity; put fantasy impact in fantasy_markdown (RB rushing environment, QB time-to-throw, fewer sacks ,  tie to named skill players when possible). depth_chart_ol_def and draft_capital_2026 help fact-check OL names and round.
 - DL/LB/DB news: frame impact on team run/pass game or team DEF quality, not individual IDP value. DEF camp darlings only when inputs repeat the same name or describe a unit trend.
 - Use team_stats_2025 ranks when relevant (e.g. "2025 run-block rank 3", "def yards allowed rank 1") to add context for OL/DEF unit stories.
 - coaching_2026: use HC/OC/DC/GM names and titles from the block. Jesse Minter is HC in Baltimore, not DC. GM (e.g. Omar Khan, Howie Roseman) owns trades, contracts, and draft capital moves. HC is usually offense- or defense-minded: an offensive HC (e.g. Mike McCarthy) works closely with the OC (Brian Angelichio) on scheme and usage; the DC (Patrick Graham) runs the defense with less HC sway. A defensive-minded HC mirrors that on the other side. Reference this hierarchy when news involves scheme, trades, or coordinator quotes ,  not every paragraph.
-- Uniform section shape (hard, every team): intro_paragraphs + activity_markdown + fantasy_markdown. No separate Talk section. Always return all three fields for every team (quiet stubs OK). Never omit Fantasy for one team and keep it for another.
-- intro_paragraphs: narrative arc for the day's/week's biggest beats. Depth and reasoning live here.
-- activity_markdown: ### Activity only. Bullets that add NEW facts, grounded inferences, and former Talk beats that still matter. KEEP coach/player quotes that name a starter, clarify a competition, give an injury timeline/status, or change a role ,  fold them into Activity (or into the intro if that quote is the week's lead). Do not drop these just because there is no Talk section. Skip empty process noise and quotes that only restate the intro. Prefer deltas: timelines, same-week payoffs, competition implications, unused details from inputs. Do not invent facts. Rumors: readable story beats (who, outlet, why it matters); use review:rumor flag, not inline [RUMOR] brackets.
+- Uniform section shape: Daily/camp: intro_paragraphs + activity_markdown + fantasy_markdown. REG/POST weekly: intro_paragraphs + fantasy_markdown only; activity_markdown and rookie_paragraph are empty strings "". No separate Talk section. Never omit Fantasy for one team and keep it for another.
+- intro_paragraphs: narrative arc for the day's/week's biggest beats. Depth and reasoning live here. In REG, open with fantasy impact (PPR, who won/lost matchups when a star went off on TNF/MNF) when the number earns it.
+- activity_markdown: Daily/camp only. ### Activity bullets with NEW facts, quotes, injury timelines. REG/POST weekly: always "". Fold earned quotes into intro; do not parrot.
 - talk_markdown: ALWAYS return an empty string "". Do not write a ### Talk section.
-- fantasy_markdown: ### Fantasy lens ALWAYS present. News-driven implication bullets ONLY (QB/RB/WR/TE/team DEF). Do not restate the news; write the draft/waiver/stream so-what. Skip settled-starter/no-news filler. If battles name a settled complement (Gainwell behind Irving), keep that name in the RB1 so-what; do not drop them because the starter's job is safe. When OL or trench news is in inputs, at most one bullet on how the line affects fantasy ,  never recommend drafting an individual lineman. Never label depth in parentheses like (QB1), (RB2), (WR3). Do not tag household skill names with (QB)/(RB)/(WR)/(TE). Cues like (CB) or (RG) are fine for lesser-known or non-skill names. Use natural prose when role matters. RB1 is the starter; RB2/RB3 are backups/handcuffs. Quiet day/week = one honest bullet that there were no fantasy-relevant updates.
+- fantasy_markdown: ### Fantasy lens ALWAYS present. Implication bullets with zest: name PPR, matchup stakes (TNF crushing Sunday lineups; MNF saving or ruining nights), and next-week outlook. Do not restatedry box scores. Skip settled-starter/no-news filler. If battles name a settled complement (Gainwell behind Irving), keep that name in the RB1 so-what. When OL or trench news is in inputs, at most one bullet on how the line affects fantasy ,  never recommend drafting an individual lineman. Never label depth in parentheses like (QB1), (RB2), (WR3). Do not tag household skill names with (QB)/(RB)/(WR)/(TE). Cues like (CB) or (RG) are fine for lesser-known or non-skill names. Use natural prose when role matters. RB1 is the starter; RB2/RB3 are backups/handcuffs. Quiet day/week = one honest bullet that there were no fantasy-relevant updates.
+- Committee / usage table (REG, when relevant): if two+ RBs/WRs/TEs split meaningful snaps or carries, append a short markdown table under Fantasy (Player | Snaps% | Carries/Targets | Rec | Yards | PPR) for the relevant room only. Skip 80/20 rooms.
 - Dual-threat fill-in QBs (e.g. Malik Willis): do NOT call them low-ceiling. Sparse full-game samples with rushing spike weeks are boom-or-bust (high ceiling, low floor, unproven week to week). If you lack those game logs in context, say unproven and volatile rather than assigning a low ceiling.
-- Beat budget (uniform): a story appears in at most TWO of {intro, activity, fantasy}. Prefer intro+fantasy for major beats, or activity+fantasy when the intro did not cover it. Bubble WR5/retirement/depth noise gets ONE mention max.
+- Beat budget: a story appears in at most TWO of {intro, activity, fantasy} on daily/camp; REG weekly prefers intro+fantasy only (no Activity). Bubble WR5/retirement/depth noise gets ONE mention max.
 - Preseason games: account for who started, who sat, injuries, and first-team notes from reporting. Do NOT treat the PRE box as a workload study or a new depth chart. Starters often play a series or do not play at all; a handful of carries or targets for a locked-in starter is warmup, not a split. Backups and camp bodies pad snaps; their leftover target/rush shares are not "winning the job" without coach naming, first-team reps, or depth-chart movement. Skip unnamed 4th-string splash stats.
-- skill_usage (when present): cite only those numbers. Never invent shares, yards, or snaps. Skip 80/20 RB rooms. Regular-season flags (split_backfield, target_leader) do not apply to PRE.
+- skill_usage (when present): cite only those numbers. Never invent shares, yards, or snaps. Skip 80/20 RB rooms. Regular-season flags (split_backfield, target_leader) do not apply to PRE. Never paste internal flag or snake_case names into prose (no rb_rush_share, wr_target_split, split_backfield, te_featured, fantasy_skill_depth, skill_position_battles, snap_pct); translate into plain English ("67 percent of RB rush share").
 - PRE skill_usage: prefer one proof line over a recap.
-- REG/POST skill_usage + latest_game / game_box: the week's game is the lead. Named players do not need a stat line on every mention. Put the number in only when it earns its place in the sentence (volume, a quiet night, a spike, a committee split). Never invent. When a line helps: WR/TE catches and yards, plus snap_pct as the usage proxy (routes-run is not in this dataset). RB carries/yards plus snap_pct and rb_rush_share when the backfield is split (4 carries vs 12 is 25% of the work). QB passing yards (attempts/TDs/INTs as needed) plus rushing yards when it matters. PPR in game_box.skill is the fantasy score. After a line, one short insight: why it was good, quiet, or disappointing. Team DEF is at most one short beat from latest_game (points allowed, yards allowed, turnovers).
+- REG/POST skill_usage + latest_game / game_box: the week's game is the lead. Named players do not need a stat line on every mention. Put the number in only when it earns its place in the sentence (volume, a quiet night, a spike, a committee split). Never invent. When a line helps: WR/TE catches and yards, plus snap_pct as the usage proxy (routes-run is not in this dataset). RB carries/yards plus snap_pct and rb_rush_share when the backfield is split (4 carries vs 12 is 25% of the work). QB passing yards (attempts/TDs/INTs as needed) plus rushing yards when it matters. PPR in game_box.skill is the fantasy score. After a line, one short insight: why it was good, quiet, or disappointing. Team DEF is at most one short beat from latest_game (points allowed, yards allowed, turnovers). Parenthetical counting stats stay Arabic numerals (targets (6), yards (83)); never footnote-superscript those counts.
 - PRE storyline cites (do this): when news already names a player's preseason game, add 1-2 counting stats from skill_usage on that same player (4 catches for 51 yards, 153 yards and 2 TDs on 13 attempts). Target share is optional color on that named player ("16% of Pittsburgh's targets while the WR1s sat"), not a job verdict. Pass_attempts / snaps remain the closer on will-he-play previews.
 - PRE storyline cites (do not): invent rec/yds/TD lines; crown WR3/RB2 from a camp-body share lead; treat Chase Brown / Breece Hall warmup carries as a committee.
 - Play/sit follow-up (hard, every named player on every team): if a coach or report said someone will play / may start / is confirmed for this week's preseason game, and skill_usage or play_sit_payoffs has that player's box, you MUST close with how they actually did. Cite 1-2 counting stats. Never leave the week-in-review in future tense ("will play," "confirmed to play," "wants to play") after the game. This includes backups and rookies (Ty Simpson), not just stars. A warmup series is still the closer; do not skip it because the job is settled.
@@ -114,7 +154,7 @@ Writing style:
 - In fantasy_markdown only: do not use parenthetical depth slots or years_exp; avoid veteran/year labels unless the bullet is about experience/development.
 - Do not write podcast meta (host departures, episode titles, Ring of Honor ballots) unless tied to named NFL/fantasy news.
 - In prose, cite with superscripts only; footnote label can name outlet. Do not write "per Locked On X" in the body.
-- Citations in prose: end the sentence with Unicode superscript only (¹ ² ³) matching footnotes[].n. Example: "Yes. This is it," Rodgers said Wednesday, per ESPN and r/steelers.¹ Never use [1], [2], or bracketed reference numbers.
+- Citations in prose: end the sentence with Unicode superscript only (¹ ² ³) matching footnotes[].n. Example: "Yes. This is it," Rodgers said Wednesday, per ESPN and r/steelers.¹ Never use [1], [2], or bracketed reference numbers. Never put footnote superscripts on counting stats (targets (6) stays Arabic).
 - footnotes[].label must be a readable citation line (quote or paraphrase + outlet), NOT just "ESPN". Example label: "\\"Yes. This is it.\\" ,  Rodgers, Wednesday media availability, ESPN / r/steelers"
 - Do not tuck long asides in parentheses; use a new sentence instead.
 - Past-season games/playoffs: only use Season context or input JSON; label the year (e.g. 2025 Wild Card vs Texans).
@@ -159,6 +199,21 @@ def normalize_composed_section(data: dict) -> dict:
 
     data["talk_markdown"] = ""
     data["activity_markdown"] = activity
+    data["fantasy_markdown"] = fantasy
+    return _sanitize_compose_text(data)
+
+
+def normalize_composed_section_weekly(data: dict) -> dict:
+    """REG/POST weekly: intro + Fantasy only. Drop Activity and Rookie notes."""
+    fantasy = (data.get("fantasy_markdown") or "").strip()
+    if fantasy and not re.match(r"^#{1,6}\s*Fantasy lens\b", fantasy, re.I):
+        fantasy = f"### Fantasy lens\n\n{fantasy}"
+    if not fantasy:
+        fantasy = QUIET_FANTASY
+
+    data["talk_markdown"] = ""
+    data["activity_markdown"] = ""
+    data["rookie_paragraph"] = ""
     data["fantasy_markdown"] = fantasy
     return _sanitize_compose_text(data)
 
@@ -251,7 +306,8 @@ Rules:
 WEEKLY_STYLE_ADDENDUM = """
 Weekly recap rules (override daily "last 24h" where they conflict):
 - This is a WEEK N RECAP for the Tue-Mon Pacific window (Thursday-Monday games, plus Tue/Wed news). Synthesize the week's arc; do NOT write day-by-day chronology. Shorter and less speculative than camp/preseason copy.
-- REG/POST story (hard): lead with who scored fantasy points, how many (PPR from game_box.skill), and the outlook. The game is the story. Do not write camp position-battle copy as the lead once a regular-season box exists. 3rd/4th-string or bubble players are not the main story. If one played a meaningful snap share and got real work (catches, carries, a score), one short flyer to keep an eye on is enough.
+- REG/POST story (hard): lead with who scored fantasy points, how many (PPR from game_box.skill), and the outlook. Write with zest, not a wire. A 40-PPR TNF night should feel like it decided matchups before Sunday; an MNF spike should feel like it saved or ruined Monday nights. The game is the story. Do not write camp position-battle copy as the lead once a regular-season box exists. 3rd/4th-string or bubble players are not the main story. If one played a meaningful snap share and got real work (catches, carries, a score), one short flyer to keep an eye on is enough.
+- REG injuries (hard): inactive / DNP / in-game exit / day-to-day / IR belong in the same beat as the quiet line. Never describe an inactive as "unclear usage." Prefer injury_status notes (and topic_clusters) over inventing play-by-play.
 - topic_clusters include day_count (how many distinct days the story appeared). Higher day_count = more prominent unless the week's game from game_box is the bigger story.
 - game_box (when present): authoritative box for this club's latest completed game. REG/POST: lead the intro with that game. Named players do not need a counting line on every mention; use game_box.skill.line, snap_pct, rb_rush_share, and ppr when the number helps the beat. Never invent.
 - game_box.game: opponent, score, home/away, yards allowed, turnovers. Team DEF gets at most one short beat from those numbers. Do not invent a score.
@@ -261,11 +317,11 @@ Weekly recap rules (override daily "last 24h" where they conflict):
 - story_arcs (when present): each row is a player with an earlier setup and a later outcome. Write those as one sentence or bullet. Prefer the later fact as the closer.
 - Tense: this week is over. Monday Night Football is in this window.
 - Preseason games that happened this week are the payoff for "will starters play?" previews. Cover who started, who sat, who left, and injuries from those recaps. Do not skip the game because a midweek quote already mentioned it.
-- Uniform shape for every team: intro + ### Activity + ### Fantasy lens. talk_markdown always "".
-- Keep substantive coach/player quotes (starter naming, injury status, role clarity) by folding them into the intro or Activity. Multiple quote bullets are fine when each earns its place. Do not create a separate Talk block. Drop only empty process chatter.
-- Intro vs Activity vs Fantasy: each beat in at most two sections. Prefer intro+fantasy. Activity must not parrot the intro. Fantasy = implication and outlook only (do not restate the box score).
-- Target length: slightly shorter than camp weeklies. 1-2 tight intro paragraphs, organic Activity bullets, short Fantasy. Quiet week = shorter is OK; never pad with filler or generic camp boilerplate.
-- Every team gets the same three blocks. Use relevant topic_clusters. If the week was quiet, still return short Activity + Fantasy stubs from whatever exists.
+- Uniform shape for REG/POST weekly: intro + ### Fantasy lens only. activity_markdown "" and rookie_paragraph "". talk_markdown always "".
+- Keep substantive coach/player quotes (starter naming, injury status, role clarity) by folding them into the intro. Do not create Activity or Talk blocks in weekly REG.
+- Intro vs Fantasy: each major beat in at most both. Fantasy = implication, PPR stakes, and outlook (do not restate the box).
+- Target length: 1-2 tight intro paragraphs + short Fantasy (optional usage table for committees). Quiet week = shorter is OK; never pad.
+- Every team returns intro + fantasy. If the week was quiet, still return an honest short Fantasy stub.
 - If the week included preseason games, cover who started, who sat, injuries, and first-team depth notes. When the week's reporting already names a player's game, add 1-2 counting stats from skill_usage for that player. Do not recap leftover camp-body box-score leaders or invent committees.
 - footnotes: reuse source_urls from topic_clusters when citing; up to 6 distinct sources.
 - fantasy_markdown: week-level implication and next-week outlook only; always present; skip settled-TE/no-news filler.
@@ -292,7 +348,7 @@ def _build_team_weekly_prompt(
     return f"""Write the {team.name} section for ScoutDNA: All 32, {week_label(issue_date)}.
 Issue date: {issue_date} (Tuesday weekly cover). Week covered: {week_label(issue_date)} (Tue-Mon PT so Thursday-Monday games are in).
 
-Team tier: {team.narrative_tier}. Audience: dynasty and redraft fantasy players. Concise, grounded, slightly shorter than camp recaps. Light personality OK.
+Team tier: {team.narrative_tier}. Audience: dynasty and redraft fantasy players. Concise, grounded, slightly shorter than camp recaps. Personality and zest OK: make big PPR nights and injury swings feel like they mattered to managers.
 
 {db_block}
 
@@ -301,6 +357,7 @@ Season context (authoritative for past seasons and playoff results):
 
 Weekly input (JSON):
 - game_box: this club's latest completed game (score, opponent) plus named skill rows (line, ppr, snap_pct, rb_rush_share). REG/POST: source of truth for the game. Use those numbers when they help the story; never invent yards, catches, snaps, or shares.
+- injury_status: ESPN injury board for this team's skill players (status, injury, return_date, note). Explain quiet lines, DNP/inactive, in-game exits, and next-week availability from these rows. Out/Doubtful is not unclear usage. Do not dump the full list.
 - topic_clusters: this team's stories collected across the full Tue-Mon week, deduped by topic. day_count = number of distinct days that story was reported this week ,  higher day_count means a more prominent, recurring beat; lead with those unless the game is the bigger story.
 - story_arcs: when present, earlier preview/injury clusters paired with later outcomes for the same player. Close those loops. Do not invent facts that are not in clusters, story_arcs, play_sit_payoffs, game_box, or skill_usage.
 - play_sit_payoffs: when present, named players previewed to play/start who now have a skill_usage line. Close the loop. In REG, name how they scored or were used. Never leave "will play" / "confirmed to play" in a week that already has the game.
@@ -315,19 +372,21 @@ Weekly input (JSON):
 
 Return a single JSON object only (no markdown fences, no preamble, no duplicate JSON blocks):
 {{
-  "intro_paragraphs": "1-2 paragraphs ,  week's biggest beats; bold names; superscript citations",
-  "rookie_paragraph": "skill rookies / OL / camp darlings with weekly news; else empty string",
-  "activity_markdown": "markdown under ### Activity: merged week storylines + any earned quotes/rumors; not daily repeats",
+  "intro_paragraphs": "1-2 paragraphs ,  week's biggest beats with PPR stakes; bold names; superscript citations",
+  "rookie_paragraph": "",
+  "activity_markdown": "",
   "talk_markdown": "",
-  "fantasy_markdown": "markdown under ### Fantasy lens: week-level implication bullets; always present",
+  "fantasy_markdown": "markdown under ### Fantasy lens: week-level implication bullets + optional committee usage table; always present",
   "footnotes": [{{"n": 1, "label": "\\"Quote or summary.\\" ,  Outlet", "url": "https://..."}}],
   "tags": ["Fantasy", "Weekly"],
   "flags": ["review:rumor"]
 }}
 
 Rules:
-- Organic bullet count; never invent filler. talk_markdown must be "".
-- Every team returns intro + activity + fantasy (uniform). Quiet stubs OK.
+- Organic bullet count; never invent filler. talk_markdown, activity_markdown, and rookie_paragraph must be "".
+- Every team returns intro + fantasy (uniform). Quiet Fantasy stub OK.
+- Never paste snake_case field names (rb_rush_share etc.); write plain English.
+- Default he/him for players and coaches.
 - If topic_clusters is sparse, write the shortest honest section from whatever exists.
 - is_empty true ONLY if absolutely no usable input exists (rare).
 """
@@ -375,11 +434,11 @@ def compose_team_section_weekly(
     prior_context: str = "",
 ) -> dict:
     if not weekly_input.get("topic_clusters"):
-        return normalize_composed_section(
+        return normalize_composed_section_weekly(
             {
                 "intro_paragraphs": None,
                 "rookie_paragraph": "",
-                "activity_markdown": "_No collected items for this team this week._",
+                "activity_markdown": "",
                 "talk_markdown": "",
                 "fantasy_markdown": QUIET_FANTASY,
                 "footnotes": [],
@@ -427,10 +486,7 @@ def compose_team_section_weekly(
     if "Weekly" not in tags:
         tags.append("Weekly")
     data["tags"] = tags
-    return normalize_composed_section(data)
-
-
-def _sanitize_league(body: str, footnotes: object) -> dict:
+    return normalize_composed_section_weekly(data)
     return {
         "body": _clean_prose(body),
         "footnotes": _sanitize_footnotes(footnotes),

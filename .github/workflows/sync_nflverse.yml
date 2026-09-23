@@ -46,6 +46,13 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: cd pipeline && python -m src.run_sync_nflverse
+      - name: Sync ESPN injury board
+        if: github.event.inputs.skip_compose != 'true' && steps.weekly.outputs.compose == 'weekly'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NEWSLETTER_TIMEZONE: America/Los_Angeles
+        run: cd pipeline && python -m src.sync_espn_injuries
       - name: Compose weekly (Tuesday week recap)
         if: github.event.inputs.skip_compose != 'true' && steps.weekly.outputs.compose == 'weekly'
         env:

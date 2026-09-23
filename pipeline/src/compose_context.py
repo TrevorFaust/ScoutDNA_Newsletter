@@ -739,6 +739,78 @@ def latest_week_usage_players(team_abbr: str) -> tuple[dict[str, Any], dict[str,
     return window, by_name
 
 
+INJURY_SKILL_POS = frozenset({"QB", "RB", "WR", "TE", "FB"})
+INJURY_SKIP_STATUS = frozenset({"ACTIVE", "PROBABLE"})
+
+
+def _fetch_skill_injuries(team_abbr: str, *, limit: int = 12) -> list[dict[str, Any]] | None:
+    """ESPN injury board rows for this team's fantasy skill players."""
+    abbr = _canon_team(team_abbr)
+    aliases = USAGE_TEAM_ALIASES.get(abbr, (abbr,))
+    sb = get_client()
+    rows: list[dict] = []
+    for team_key in aliases:
+        batch = (
+            sb.table("player_injury_status")
+            .select(
+                "player_name, position, status, fantasy_status, injury_type, "
+                "injury_detail, return_date, short_comment, long_comment, nfl_week, synced_at"
+            )
+            .eq("season", USAGE_SEASON)
+            .eq("team_abbr", team_key)
+            .execute()
+            .data
+            or []
+        )
+        rows.extend(batch)
+    if not rows:
+        return None
+
+    scored: list[tuple[int, dict[str, Any]]] = []
+    for row in rows:
+        pos = (row.get("position") or "").upper()
+        if pos and pos not in INJURY_SKILL_POS:
+            continue
+        status_u = (row.get("status") or "").upper()
+        fantasy_u = (row.get("fantasy_status") or "").upper()
+        comment = (row.get("short_comment") or row.get("long_comment") or "").strip()
+        if status_u in INJURY_SKIP_STATUS and fantasy_u in ("", "ACTIVE", "PROBABLE"):
+            if not comment:
+                continue
+        item: dict[str, Any] = {
+            "name": row.get("player_name"),
+            "pos": pos or None,
+            "status": row.get("status"),
+        }
+        if row.get("fantasy_status"):
+            item["fantasy_status"] = row["fantasy_status"]
+        if row.get("injury_type"):
+            item["injury"] = row["injury_type"]
+        if row.get("injury_detail"):
+            item["detail"] = row["injury_detail"]
+        if row.get("return_date"):
+            item["return_date"] = row["return_date"]
+        if row.get("short_comment"):
+            item["note"] = row["short_comment"]
+        elif row.get("long_comment"):
+            item["note"] = (row["long_comment"] or "")[:320]
+        rank = 0
+        blob = f"{status_u} {fantasy_u}"
+        if "OUT" in blob or "INJURED RESERVE" in blob or blob.strip() == "IR":
+            rank = 3
+        elif "DOUBTFUL" in blob:
+            rank = 2
+        elif "QUESTIONABLE" in blob:
+            rank = 1
+        if comment:
+            rank += 1
+        scored.append((rank, item))
+
+    scored.sort(key=lambda t: (-t[0], (t[1].get("name") or "")))
+    out = [item for _, item in scored[:limit]]
+    return out or None
+
+
 def _fetch_depth_by_team(team_abbr: str) -> list[dict]:
     sb = get_client()
     try:
@@ -834,6 +906,9 @@ def load_compose_context(team: Team) -> str:
     latest_game = latest_team_game(abbr)
     if latest_game:
         block["latest_game"] = latest_game
+    injuries = _fetch_skill_injuries(abbr)
+    if injuries:
+        block["injury_status"] = injuries
 
     if len(block) <= 2:
         return ""
@@ -866,6 +941,12 @@ def load_compose_context(team: Team) -> str:
         "block. Never invent shares, snaps, yards, or drive counts. "
         "latest_game = this club's most recent completed game (opponent, score, yards allowed, "
         "turnovers). Cite those DEF numbers only; never invent a score. "
+        "injury_status = ESPN injury board for THIS team's skill players (QB/RB/WR/TE). "
+        "status / fantasy_status / injury_type / return_date / short_comment / long_comment. "
+        "Use it to explain quiet lines, DNP/inactive, in-game exits, and next-week availability. "
+        "Out / Doubtful / inactive is not 'unclear usage.' Prefer short_comment/long_comment "
+        "over inventing play-by-play. Do not dump the full injury list; only players who matter "
+        "to the week's fantasy story. "
         "If window.season_type is PRE: committee / target-leader flags are omitted on purpose. "
         "Do not treat PRE shares as a depth chart. Starters often sit or take a series to get "
         "warm (Chase Brown or Breece Hall with a handful of carries is maintenance, not a split). "

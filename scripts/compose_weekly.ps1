@@ -22,6 +22,10 @@ if (-not (Test-Path $VenvPython)) {
 
 Push-Location $Pipeline
 try {
+    Write-Host "Syncing ESPN injury board before weekly compose..."
+    & $VenvPython -m src.sync_espn_injuries
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
     $pyArgs = @("-m", "src.run_compose_weekly")
     if ($Date) { $pyArgs += @("--date", $Date) }
     if ($Force) { $pyArgs += @("--force") }
