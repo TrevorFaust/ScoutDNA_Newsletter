@@ -38,9 +38,36 @@ export function findInternalFlagLeaks(text: string): string[] {
   return [...hits];
 }
 
+/** Drop leaked markdown pipe tables; usage UI renders real tables instead. */
+export function stripMarkdownTables(text: string): string {
+  if (!text || !text.includes("|")) return text;
+  const lines = text.split("\n");
+  const kept: string[] = [];
+  let inTable = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const isTableRow =
+      trimmed.startsWith("|") && trimmed.includes("|", 1);
+    const isSep =
+      /^\|?\s*:?-{3,}.*\|/.test(trimmed) ||
+      /^\|?(?:\s*:?-{3,}\s*\|)+\s*:?-{3,}\s*\|?\s*$/.test(trimmed);
+    if (isTableRow || isSep) {
+      inTable = true;
+      continue;
+    }
+    if (inTable && trimmed === "") {
+      inTable = false;
+      continue;
+    }
+    inTable = false;
+    kept.push(line);
+  }
+  return kept.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 export function cleanCopy(text: string): string {
   if (!text) return text;
-  let out = text
+  let out = stripMarkdownTables(text)
     .replace(new RegExp("\\s+[\\u2014\\u2013]\\s+", "g"), ", ")
     .replace(new RegExp("[\\u2014\\u2013]", "g"), "-")
     .replace(

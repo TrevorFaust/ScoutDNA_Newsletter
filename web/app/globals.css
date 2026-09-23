@@ -1801,3 +1801,58 @@ main.usage-admin {
 .usage-table td:nth-child(2) {
   text-align: left;
 }
+
+.team-usage-panel {
+  margin: 1.25rem 0 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.team-usage-panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.35rem;
+}
+
+.team-usage-panel-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.team-usage-tabs {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.team-usage-tab {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.25rem 0.55rem;
+  cursor: pointer;
+}
+
+.team-usage-tab:hover {
+  color: var(--text);
+  border-color: var(--text);
+}
+
+.team-usage-tab-active {
+  color: var(--bg, #0b0b0b);
+  background: var(--text);
+  border-color: var(--text);
+}
+
+.team-usage-panel .usage-table th:nth-child(2),
+.team-usage-panel .usage-table td:nth-child(2) {
+  text-align: right;
+}

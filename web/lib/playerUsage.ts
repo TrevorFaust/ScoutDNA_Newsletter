@@ -29,6 +29,7 @@ export type PlayerWeekUsage = {
   receiving_air_yards: number | null;
   fantasy_points_ppr: number | null;
   rush_share: number | null;
+  rb_rush_share: number | null;
   target_share: number | null;
   air_yards_share: number | null;
   touch_share: number | null;
@@ -63,7 +64,7 @@ async function fetchAllUsage(
     let q = sb
       .from("player_week_usage")
       .select(
-        "season,season_type,week,team_abbr,gsis_id,player_name,position,offense_snaps,snap_pct,pass_attempts,passing_yards,passing_tds,interceptions,carries,rushing_yards,rushing_tds,targets,receptions,receiving_yards,receiving_tds,receiving_air_yards,fantasy_points_ppr,rush_share,target_share,air_yards_share,touch_share,team_carries,team_targets,team_air_yards"
+        "season,season_type,week,team_abbr,gsis_id,player_name,position,offense_snaps,snap_pct,pass_attempts,passing_yards,passing_tds,interceptions,carries,rushing_yards,rushing_tds,targets,receptions,receiving_yards,receiving_tds,receiving_air_yards,fantasy_points_ppr,rush_share,rb_rush_share,target_share,air_yards_share,touch_share,team_carries,team_targets,team_air_yards"
       )
       .eq("season", season)
       .eq("season_type", seasonType)
@@ -129,6 +130,35 @@ export async function fetchUsageMeta(): Promise<{
     }
   }
   return { seasons: seasons.length ? seasons : [...USAGE_SEASONS], latest };
+}
+
+/** One REG/PRE/POST week for all teams (or one team). Used on weekly issue pages. */
+export async function fetchUsageForWeek(opts: {
+  season: number;
+  seasonType?: UsageSeasonType;
+  week: number;
+  team?: string | null;
+}): Promise<PlayerWeekUsage[]> {
+  const seasonType = opts.seasonType ?? "REG";
+  const all = await fetchAllUsage(opts.season, seasonType, opts.team);
+  return all.filter((r) => Number(r.week) === opts.week);
+}
+
+/** Group by canonical team abbr (LAR/ARI/WAS). */
+export function usageByTeamAbbr(
+  rows: PlayerWeekUsage[]
+): Record<string, PlayerWeekUsage[]> {
+  const aliases: Record<string, string> = {
+    LA: "LAR",
+    AZ: "ARI",
+    WSH: "WAS",
+  };
+  const map: Record<string, PlayerWeekUsage[]> = {};
+  for (const row of rows) {
+    const abbr = aliases[row.team_abbr] ?? row.team_abbr;
+    (map[abbr] ??= []).push(row);
+  }
+  return map;
 }
 
 export function usageFlags(weekRows: PlayerWeekUsage[]): UsageFlag[] {

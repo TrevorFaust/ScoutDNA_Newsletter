@@ -38,7 +38,9 @@ alwaysApply: false
 - Fantasy = implication / PPR stakes / so-what, not a restatement of the news. Write with zest when a star goes nuclear on TNF/MNF.
 - Pronouns: default **he/him** for players and coaches. Never she/her for Tee Higgins, DeVonta Smith, etc.
 - Injuries: pregame inactive/DNP, in-game exits that change usage, and postgame day-to-day/IR/miss-time belong in the same beat as quiet lines. Prefer `injury_status` (ESPN board synced into compose context) over inventing play-by-play.
-- Committees: optional short usage table (snaps / carries or targets / PPR) under Fantasy when the room is split.
+- Committees: the site shows a Week usage panel (RB/WR/TE toggle) under each team from `player_week_usage`. Never paste markdown pipe tables into Fantasy. Describe splits in prose only.
+- Fantasy points belong in the sentence (dropped 40.8 fantasy points), not bare parentheticals.
+- In a team section, do not name opposing defenders for a strip/fumble unless that opponent is the story.
 - Bubble WR5 / retirement / deep depth: one mention max.
 - Never use em dashes (—) or en dashes (–) in prose.
 - Never paste snake_case field names (`rb_rush_share`, `split_backfield`, etc.). Translate to plain English. Pre-review must reject leftover leaks.
