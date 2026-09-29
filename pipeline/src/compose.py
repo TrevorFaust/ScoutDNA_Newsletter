@@ -498,6 +498,9 @@ def compose_team_section_weekly(
         tags.append("Weekly")
     data["tags"] = tags
     return normalize_composed_section_weekly(data)
+
+
+def _sanitize_league(body: str, footnotes: object) -> dict:
     return {
         "body": _clean_prose(body),
         "footnotes": _sanitize_footnotes(footnotes),
