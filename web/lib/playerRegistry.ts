@@ -162,26 +162,38 @@ export async function fetchPlayerPositionLookup(
       (from, to) =>
         supabase
           .from("player_week_usage")
-          .select("player_name, position")
+          .select("player_name, position, team_abbr")
           .order("player_name")
+          .order("season", { ascending: false })
+          .order("week", { ascending: false })
           .range(from, to),
       "player_name",
-      "position"
+      "position",
+      "team_abbr"
     ),
     supabase.from("team_coaching_2026").select("team_abbr, hc_name, oc_name, dc_name, gm_name"),
   ]);
 
-  // Current roster/depth wins. Known-player + usage rows only fill names those miss.
+  // Fantasy skill depth goes first: rosters carry namesakes that normalize to the same key
+  // (PHI WR DeVonta Smith vs CAR DB Devonta Smith), and the fantasy player must win.
+  // Current roster/depth next. Known-player + usage rows only fill names those miss.
   for (const row of [
+    ...fantasyDepth,
     ...rosters,
     ...rookies,
     ...olDepth,
-    ...fantasyDepth,
     ...draftPicks,
     ...knownPlayers,
-    ...usage,
   ]) {
     addPlayer(byNormalized, row.name ?? "", row.position, { teamAbbr: row.teamAbbr });
+  }
+  // Offensive usage proves a skill player; it overrides a defender namesake from rosters.
+  for (const row of usage) {
+    const existing = byNormalized.get(normalizePlayerKey(row.name ?? ""));
+    addPlayer(byNormalized, row.name ?? "", row.position, {
+      force: existing?.position === "DEF",
+      teamAbbr: row.teamAbbr,
+    });
   }
   // Staff always wins over any accidental player-name collision.
   for (const row of coaching.data ?? []) {
