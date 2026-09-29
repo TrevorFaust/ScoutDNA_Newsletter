@@ -169,6 +169,7 @@ def _build_usage_rows(season: int) -> list[dict[str, Any]]:
                 "offense_snaps": snap.get("offense_snaps"),
                 "snap_pct": snap.get("snap_pct"),
                 "pass_attempts": _int(r.get("attempts")),
+                "completions": _int(r.get("completions")),
                 "passing_yards": _int(r.get("passing_yards")),
                 "passing_tds": _int(r.get("passing_tds")),
                 "interceptions": _int(r.get("passing_interceptions") or r.get("interceptions")),
@@ -241,6 +242,11 @@ def _upsert_usage(rows: list[dict[str, Any]]) -> int:
         ).execute()
         n += len(chunk)
     return n
+
+
+def backfill_completions(seasons: tuple[int, ...] = (2026,)) -> dict[str, int]:
+    """Refresh usage rows so completions come from nflverse / ESPN box scores."""
+    return sync_player_usage(seasons)
 
 
 def sync_player_usage(seasons: tuple[int, ...] = USAGE_SEASONS) -> dict[str, int]:

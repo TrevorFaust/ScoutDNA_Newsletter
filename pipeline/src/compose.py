@@ -109,7 +109,11 @@ def _sanitize_footnotes(footnotes: object) -> object:
     out: list = []
     for fn in footnotes:
         if isinstance(fn, dict) and isinstance(fn.get("label"), str):
-            fn = {**fn, "label": _clean_prose(fn["label"])}
+            label = _clean_prose(fn["label"])
+            label = re.sub(r"\s*\(\s*review:rumor\s*\)", "", label, flags=re.I)
+            label = re.sub(r"\breview:rumor\b", "", label, flags=re.I)
+            label = re.sub(r"\(\s*\)", "", label).strip()
+            fn = {**fn, "label": label}
         out.append(fn)
     return out
 
@@ -130,7 +134,10 @@ Writing style:
 - Intro stays factual but not flat: lead with the game, name PPR when it matters, and let stakes land. Put fantasy points in the sentence itself (Allen dropped 40.8 fantasy points), never as a bare parenthetical dump like (Allen at 40.8 PPR). Put ALL dynasty/redraft angles in fantasy_markdown only (no "Fantasy take:" prefix).
 - Pronouns (hard): NFL players, coaches, coordinators, and GMs are almost always men. Default to he/him/his. Never write she/her for a player or coach unless the source is clearly about a woman (usually a reporter). Tee Higgins, DeVonta Smith, Ja'Marr Chase, etc. are he.
 - You may infer role/usage from coach quotes, injury exits, or camp buzz without saying "depth chart" every time. Do NOT invent play-by-play. If reporting names an early fumble, in-game exit, or inactive that explains a snap swing, use that; otherwise stick to box + injury/news. In a team section, do not name opposing defenders for a strip/fumble/tackle unless that opponent is the story; "lost a first-quarter fumble" is enough.
-- Injury context (hard): when a quiet line or snap collapse is injury-driven, say so. Cover (a) pregame injury report / inactive / DNP, (b) in-game exit that changed usage, (c) postgame day-to-day / IR / miss-time follow-up. Prefer injury_status (ESPN board in compose context) and reporting; do not invent play-by-play. Missing from the box is not "unclear usage"; if inactive lists or reports say Out, write Out. Write timelines as full sentences (He is out indefinitely, and Marcus Mariota will start Week 3 against Seattle), not jammed parentheticals.
+- Injury context (hard): when a quiet line or snap collapse is injury-driven, say so. Cover (a) pregame injury report / inactive / DNP, (b) in-game exit that changed usage, (c) postgame day-to-day / IR / miss-time follow-up. Prefer injury_status (ESPN board in compose context) and reporting; do not invent play-by-play. Missing from the box is not "unclear usage"; if inactive lists or reports say Out, write Out. Write timelines as full sentences (He is out indefinitely, and Marcus Mariota will start Week 3 against Seattle), not jammed parentheticals. Injuries from earlier weeks are past events: say when it happened ("has been on IR since Sept. 12 with the high-ankle sprain he suffered in the opener"), then give the new update. Never write "landed on IR" as if it were this week's news. Check the note for trades and releases: a player dealt away (e.g. "dealt to Green Bay") never appears in his old team's depth talk.
+- Weekly takes weigh the whole season, not one box: before calling a player unreliable or droppable, check his earlier REG weeks (skill_usage latest_week ppr_by_week and season_to_date). One quiet game after two strong ones is a dip, not a demotion. At scarce positions (TE especially), a player with multiple strong weeks stays a start unless injury or role change says otherwise.
+- Do not overstate depth players: a rookie with a handful of catches is not a team's "most dynamic" weapon. Descriptors like best, most dynamic, or top option need the numbers to back them.
+- Phrasing: write "workhorse" or "lead back" rather than "bell cow"; the site's name chipper can confuse "Bell" with players named Bell.
 - Names: bold every player (including free agents / waiver claims), every coach/coordinator/GM, and named reporters when they are the source: **Aaron Rodgers**, **Germie Bernard**, **Mike McCarthy**, **Omar Khan**, **Adam Schefter**. Free agents stay players by position (e.g. free agent WR **Stefon Diggs**). Reporters are not players or coaches. The UI chips players by position, coaches in staff color, and media as Other. NEVER bold non-person phrases (no **QB battle**, **WR room**, **Fantasy lens**, **depth chart**). Position cues: skip them for obvious skill-position stars the registry will badge (no **Jordan Love** (QB), no QB **Josh Allen**). For lesser-known players, OL/DEF/specialists, and new adds, put a short cue: CB **Keisean Nixon**, RG **Anthony Belton**, or **Keisean Nixon** (CB). Never write (QB1), (RB2), (WR3).
 - Experience/years: player_experience in context is for accuracy only ,  do NOT label every player. Default: name + position only. Say rookie only for true rookies (years_exp=0) when it matters to the story. Say second-year only when the piece is about year-two breakout/development. Say veteran or career length only for outliers (e.g. 15+ year QB on a short deal) and at most once per player per section. Never repeat "22-year veteran" for the same QB daily. Wrong labels forbidden: years_exp=1 is second year, not first year.
 - Venues: never invent or mash stadium names (no "Paul Chase Brown Stadium"). Prefer "training camp" / "padded practices" unless the input states the current official venue.
@@ -268,11 +275,12 @@ Return a single JSON object only (no markdown fences, no preamble, no duplicate 
   "fantasy_markdown": "markdown starting with ### Fantasy lens: implication bullets only; always present",
   "footnotes": [{{"n": 1, "label": "\\"Quote or summary.\\" ,  Outlet / subreddit", "url": "https://..."}}],
   "tags": ["Fantasy", "Camp"],
-  "flags": ["review:rumor"]
+  "flags": []
 }}
 
 Rules:
 - Organic bullet count; never invent filler. talk_markdown must be "".
+- flags: ["review:rumor"] only when Activity states a rumor, trade buzz, or single-source speculation. Otherwise []. Never write review:rumor inside a footnote label.
 - Every team returns intro + activity + fantasy (uniform). Quiet stubs OK.
 - Fantasy lens: only implication/so-what for today's stories; no (QB1)/(RB2) labels; RB1 = starter, not handcuff.
 - Do not add years_exp/veteran/rookie labels unless the story requires it (see Experience/years rule).
@@ -390,11 +398,12 @@ Return a single JSON object only (no markdown fences, no preamble, no duplicate 
   "fantasy_markdown": "markdown under ### Fantasy lens: week-level implication bullets; always present; never markdown tables",
   "footnotes": [{{"n": 1, "label": "\\"Quote or summary.\\" ,  Outlet", "url": "https://..."}}],
   "tags": ["Fantasy", "Weekly"],
-  "flags": ["review:rumor"]
+  "flags": []
 }}
 
 Rules:
 - Organic bullet count; never invent filler. talk_markdown, activity_markdown, and rookie_paragraph must be "".
+- flags: ["review:rumor"] only when intro_paragraphs states a rumor, trade buzz, or single-source speculation in its own sentence. Otherwise []. Do not park the rumor only in a footnote label, and never write review:rumor inside a label.
 - Every team returns intro + fantasy (uniform). Quiet Fantasy stub OK.
 - Never paste snake_case field names (rb_rush_share etc.); write plain English.
 - Default he/him for players and coaches.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections import defaultdict
 from typing import Any
 
 from .db import get_client
@@ -578,6 +579,18 @@ def _fetch_skill_usage(team_abbr: str) -> dict[str, Any] | None:
             kept_names.add(name)
     latest = kept
 
+    ppr_log: dict[str, list[float]] = defaultdict(list)
+    for r in typed:
+        if r.get("fantasy_points_ppr") is not None:
+            ppr_log[r["player_name"]].append(round(_num(r.get("fantasy_points_ppr")), 1))
+
+    def _with_log(r: dict[str, Any]) -> dict[str, Any]:
+        out = _compact_usage_player(r, prior_by_name.get(r["player_name"]))
+        log = ppr_log.get(r["player_name"]) or []
+        if len(log) > 1:
+            out["ppr_by_week"] = log
+        return out
+
     # True season shares: player totals / team season totals (not avg of weekly %).
     team_week: dict[int, dict[str, float]] = {}
     for r in typed:
@@ -660,12 +673,8 @@ def _fetch_skill_usage(team_abbr: str) -> dict[str, Any] | None:
             "week": latest_week,
         },
         "flags": _usage_flags(latest, season_type),
-        "latest_week": [
-            _compact_usage_player(r, prior_by_name.get(r["player_name"])) for r in latest
-        ],
-        "latest_week_full": [
-            _compact_usage_player(r, prior_by_name.get(r["player_name"])) for r in all_latest
-        ],
+        "latest_week": [_with_log(r) for r in latest],
+        "latest_week_full": [_with_log(r) for r in all_latest],
         "season_to_date": [
             _compact_usage_player(r, None) for r in std_rows[:USAGE_PLAYER_LIMIT]
         ],

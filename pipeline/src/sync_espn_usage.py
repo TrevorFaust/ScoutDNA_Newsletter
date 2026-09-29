@@ -32,11 +32,16 @@ def _map_team(abbr: str | None) -> str:
 
 
 def _slash_attempts(value: Any) -> int | None:
+    return _slash_pair(value)[1]
+
+
+def _slash_pair(value: Any) -> tuple[int | None, int | None]:
     text = str(value or "")
     if "/" not in text:
-        return _int(value)
-    right = text.split("/", 1)[1]
-    return _int(right.split("-")[0] if "-" in right else right)
+        return None, _int(value)
+    left, right = text.split("/", 1)
+    att = _int(right.split("-")[0] if "-" in right else right)
+    return _int(left), att
 
 
 def _ppr(
@@ -140,7 +145,9 @@ def _merge_box_players(team_block: dict[str, Any]) -> list[dict[str, Any]]:
             if stats.get("_name"):
                 row["display_name"] = stats["_name"]
             if name == "passing":
-                row["pass_attempts"] = _slash_attempts(stats.get("completions/passingAttempts"))
+                comps, atts = _slash_pair(stats.get("completions/passingAttempts"))
+                row["completions"] = comps
+                row["pass_attempts"] = atts
                 row["passing_yards"] = _int(stats.get("passingYards"))
                 row["passing_tds"] = _int(stats.get("passingTouchdowns"))
                 row["interceptions"] = _int(stats.get("interceptions"))
@@ -234,6 +241,7 @@ def build_espn_pre_usage(season: int) -> list[dict[str, Any]]:
                             "offense_snaps": None,
                             "snap_pct": None,
                             "pass_attempts": raw.get("pass_attempts"),
+                            "completions": raw.get("completions"),
                             "passing_yards": raw.get("passing_yards"),
                             "passing_tds": raw.get("passing_tds"),
                             "interceptions": raw.get("interceptions"),

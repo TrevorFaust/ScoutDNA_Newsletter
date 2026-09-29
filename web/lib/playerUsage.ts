@@ -16,6 +16,7 @@ export type PlayerWeekUsage = {
   offense_snaps: number | null;
   snap_pct: number | null;
   pass_attempts: number | null;
+  completions: number | null;
   passing_yards: number | null;
   passing_tds: number | null;
   interceptions: number | null;
@@ -64,7 +65,7 @@ async function fetchAllUsage(
     let q = sb
       .from("player_week_usage")
       .select(
-        "season,season_type,week,team_abbr,gsis_id,player_name,position,offense_snaps,snap_pct,pass_attempts,passing_yards,passing_tds,interceptions,carries,rushing_yards,rushing_tds,targets,receptions,receiving_yards,receiving_tds,receiving_air_yards,fantasy_points_ppr,rush_share,rb_rush_share,target_share,air_yards_share,touch_share,team_carries,team_targets,team_air_yards"
+        "season,season_type,week,team_abbr,gsis_id,player_name,position,offense_snaps,snap_pct,pass_attempts,completions,passing_yards,passing_tds,interceptions,carries,rushing_yards,rushing_tds,targets,receptions,receiving_yards,receiving_tds,receiving_air_yards,fantasy_points_ppr,rush_share,rb_rush_share,target_share,air_yards_share,touch_share,team_carries,team_targets,team_air_yards"
       )
       .eq("season", season)
       .eq("season_type", seasonType)
@@ -282,7 +283,13 @@ export function seasonToDate(rows: PlayerWeekUsage[]): PlayerWeekUsage[] {
         targets: row.targets ?? 0,
         receptions: row.receptions ?? 0,
         rushing_yards: row.rushing_yards ?? 0,
+        rushing_tds: row.rushing_tds ?? 0,
         receiving_yards: row.receiving_yards ?? 0,
+        pass_attempts: row.pass_attempts ?? 0,
+        completions: row.completions ?? 0,
+        passing_yards: row.passing_yards ?? 0,
+        passing_tds: row.passing_tds ?? 0,
+        interceptions: row.interceptions ?? 0,
         fantasy_points_ppr: row.fantasy_points_ppr ?? 0,
         _snaps: row.offense_snaps ?? 0,
         _air: row.receiving_air_yards ?? 0,
@@ -293,8 +300,14 @@ export function seasonToDate(rows: PlayerWeekUsage[]): PlayerWeekUsage[] {
     cur.targets = (cur.targets ?? 0) + (row.targets ?? 0);
     cur.receptions = (cur.receptions ?? 0) + (row.receptions ?? 0);
     cur.rushing_yards = (cur.rushing_yards ?? 0) + (row.rushing_yards ?? 0);
+    cur.rushing_tds = (cur.rushing_tds ?? 0) + (row.rushing_tds ?? 0);
     cur.receiving_yards =
       (cur.receiving_yards ?? 0) + (row.receiving_yards ?? 0);
+    cur.pass_attempts = (cur.pass_attempts ?? 0) + (row.pass_attempts ?? 0);
+    cur.completions = (cur.completions ?? 0) + (row.completions ?? 0);
+    cur.passing_yards = (cur.passing_yards ?? 0) + (row.passing_yards ?? 0);
+    cur.passing_tds = (cur.passing_tds ?? 0) + (row.passing_tds ?? 0);
+    cur.interceptions = (cur.interceptions ?? 0) + (row.interceptions ?? 0);
     cur.fantasy_points_ppr =
       (cur.fantasy_points_ppr ?? 0) + (row.fantasy_points_ppr ?? 0);
     cur._snaps += row.offense_snaps ?? 0;
@@ -332,10 +345,19 @@ function round1(n: number | null) {
 }
 
 function played(row: PlayerWeekUsage) {
+  const pos = (row.position || "").toUpperCase();
+  if (pos === "WR") {
+    return (
+      (row.offense_snaps ?? 0) > 0 ||
+      (row.snap_pct ?? 0) > 0 ||
+      (row.targets ?? 0) >= 1
+    );
+  }
   return (
     (row.snap_pct ?? 0) >= 10 ||
     (row.targets ?? 0) >= 1 ||
     (row.carries ?? 0) >= 1 ||
+    (row.pass_attempts ?? 0) >= 1 ||
     (row.fantasy_points_ppr ?? 0) !== 0
   );
 }

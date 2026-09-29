@@ -442,6 +442,11 @@ function matchAt(
     }
     // Bare "battle" / "young" / "rush" is prose, not a player surname chip.
     if (SURNAME_STOPWORDS.has(key)) return null;
+    // Lowercase "bell" in "bell cow" is prose; real surnames are capitalized.
+    if (token[0] !== token[0].toUpperCase()) return null;
+    if (key === "bell" && /^[\s-]+cows?\b/i.test(text.slice(i + bareToken(token).length))) {
+      return null;
+    }
     // "Ed Reed" must not render as "Ed Austin Reed" when only Austin Reed is known.
     if (
       prev &&
