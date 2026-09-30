@@ -1,20 +1,30 @@
 import type { PlayerWeekUsage } from "@/lib/playerUsage";
-import { countOrDash, countOrZero, fmt, type PosTab } from "@/lib/usageDisplay";
+import {
+  countOrDash,
+  countOrZero,
+  fantasyPoints,
+  fmt,
+  scoringColumn,
+  type PosTab,
+  type Scoring,
+} from "@/lib/usageDisplay";
 
 type Props = {
   rows: PlayerWeekUsage[];
   tab: PosTab;
+  scoring?: Scoring;
   showPos?: boolean;
 };
 
-export function UsagePosTable({ rows, tab, showPos = false }: Props) {
+export function UsagePosTable({ rows, tab, scoring = "ppr", showPos = false }: Props) {
   return (
     <div className="usage-table-wrap">
       <table className="usage-table">
         <thead>
           <tr>
-            <th>Player</th>
-            {showPos ? <th>Pos</th> : null}
+            <th className="usage-name">Player</th>
+            {showPos ? <th className="usage-pos">Pos</th> : null}
+            <th>Snaps</th>
             <th>Snap%</th>
             {tab === "QB" ? (
               <>
@@ -45,14 +55,18 @@ export function UsagePosTable({ rows, tab, showPos = false }: Props) {
                 <th>Air%</th>
               </>
             ) : null}
-            <th>PPR</th>
+            <th className="usage-fpts">
+              FPts{" "}
+              <span className="usage-fpts-format">({scoringColumn(scoring)})</span>
+            </th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.gsis_id}>
-              <td>{r.player_name}</td>
-              {showPos ? <td>{r.position}</td> : null}
+              <td className="usage-name">{r.player_name}</td>
+              {showPos ? <td className="usage-pos">{r.position}</td> : null}
+              <td>{countOrDash(r.offense_snaps)}</td>
               <td>{fmt(r.snap_pct, 0)}</td>
               {tab === "QB" ? (
                 <>
@@ -83,7 +97,7 @@ export function UsagePosTable({ rows, tab, showPos = false }: Props) {
                   <td>{fmt(r.air_yards_share, 0)}</td>
                 </>
               ) : null}
-              <td>{fmt(r.fantasy_points_ppr)}</td>
+              <td>{fmt(fantasyPoints(r, scoring))}</td>
             </tr>
           ))}
         </tbody>

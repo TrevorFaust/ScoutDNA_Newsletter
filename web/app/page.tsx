@@ -1,38 +1,58 @@
 import Link from "next/link";
+import { HomeFeatureCards } from "@/components/HomeFeatureCards";
 import { IssueCard } from "@/components/IssueCard";
+import { getViewer, issueTeamHref } from "@/lib/auth";
 import { fetchIssues, fetchLatestIssue } from "@/lib/issues";
+import { displayIssueTitle, issueDeck, issueHook } from "@/lib/issueTitle";
 
-export default async function HomePage() {
-  const [
-    { issues: allIssues, error },
-    latestDaily,
-    latestWeekly,
-  ] = await Promise.all([
-    fetchIssues(),
-    fetchLatestIssue("daily"),
-    fetchLatestIssue("weekly"),
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ denied?: string }>;
+}) {
+  const params = await searchParams;
+  const viewer = await getViewer();
+  const includeDrafts = Boolean(viewer?.isAdmin);
+  const teamSlug = viewer?.favoriteTeamSlug ?? undefined;
+
+  const [{ issues: allIssues, error }, latestWeekly] = await Promise.all([
+    fetchIssues("weekly", { includeDrafts }),
+    fetchLatestIssue("weekly", !includeDrafts),
   ]);
 
-  const dailyCount = allIssues.filter((i) => i.issue_type === "daily").length;
-  const weeklyCount = allIssues.filter((i) => i.issue_type === "weekly").length;
-  const recent = allIssues.slice(0, 4);
+  const recent = allIssues
+    .filter((issue) => issue.slug !== latestWeekly?.slug)
+    .slice(0, 3);
+  const latestTitle = latestWeekly ? displayIssueTitle(latestWeekly) : undefined;
+  const latestHook = latestWeekly ? issueHook(latestWeekly) : null;
+  const latestDeck = latestWeekly ? issueDeck(latestWeekly) : null;
+  const latestHref = latestWeekly
+    ? issueTeamHref(latestWeekly.slug, teamSlug)
+    : undefined;
 
   return (
     <main>
+      {params.denied === "1" ? (
+        <p className="alert">
+          Review, rumors, camp signals, and draft upload are editor-only.
+        </p>
+      ) : null}
+
       <section className="hero">
-        <p className="hero-eyebrow">Every team. Every day.</p>
-        <h1 className="hero-title">ScoutDNA: All 32</h1>
+        <p className="hero-eyebrow">All 32</p>
+        <h1 className="hero-title">
+          News for <em>every</em> team
+        </h1>
         <p className="hero-lead">
-          A structured NFL digest: camp moves, injuries, depth charts, and rumors
-          with a fantasy lens. All 32 franchises, cited sources, one read.
+          Your club had a week. So did the other 31. Don&apos;t miss a snap.
         </p>
         <div className="hero-actions">
-          {latestDaily && (
-            <Link href={`/issue/${latestDaily.slug}`} className="btn btn-primary">
-              Read today&apos;s edition
+          {latestWeekly && latestHref && (
+            <Link href={latestHref} className="btn btn-paper">
+              Read {latestTitle}
             </Link>
           )}
-          <Link href="/teams" className="btn btn-secondary">
+          <Link href="/teams" className="btn btn-paper">
             Browse by team
           </Link>
         </div>
@@ -45,43 +65,44 @@ export default async function HomePage() {
         </p>
       )}
 
-      <section className="edition-cards">
-        <Link href="/daily" className="edition-card edition-card-daily">
-          <span className="edition-card-label">Daily Edition</span>
-          <span className="edition-card-count">{dailyCount} issues</span>
-          <p className="edition-card-desc">
-            Every morning. League lens plus all 32 team sections from the
-            prior 24 hours.
-          </p>
-          {latestDaily && (
-            <span className="edition-card-latest">Latest: {latestDaily.issue_date}</span>
-          )}
-        </Link>
+      <HomeFeatureCards
+        latestHref={latestHref}
+        latestLabel={latestTitle}
+      />
 
-        <Link href="/weekly" className="edition-card edition-card-weekly">
-          <span className="edition-card-label">Week recaps</span>
-          <span className="edition-card-count">{weeklyCount} issues</span>
-          <p className="edition-card-desc">
-            Tuesday recap after Monday Night Football. Week 1 recap, Week 2
-            recap, and so on: who scored, how they were used, what is next.
-          </p>
-          {latestWeekly && (
-            <span className="edition-card-latest">Latest: {latestWeekly.issue_date}</span>
-          )}
-        </Link>
-      </section>
+      {latestWeekly && latestHref && (
+        <section className="featured-recap">
+          <div className="featured-recap-copy">
+            <span className="edition-badge edition-weekly">Latest recap</span>
+            <h2>{latestTitle}</h2>
+            {latestHook ? <p className="featured-recap-hook">{latestHook}</p> : null}
+            <p>
+              {latestDeck ||
+                "Boxes, what moved, and the reporting, team by team."}
+            </p>
+            <Link href={latestHref} className="btn btn-paper">
+              Open this week
+            </Link>
+          </div>
+        </section>
+      )}
 
       {recent.length > 0 && (
-        <section className="page-section">
+        <section className="page-section page-section-center home-recent">
           <div className="section-header">
-            <h2>Recent issues</h2>
-            <Link href="/daily" className="section-link">
+            <h2>Recent recaps</h2>
+            <Link href="/weekly" className="section-link">
               View all
             </Link>
           </div>
           <div className="issue-grid issue-grid-compact">
             {recent.map((issue) => (
-              <IssueCard key={`${issue.slug}-${issue.issue_type}`} issue={issue} />
+              <IssueCard
+                key={`${issue.slug}-${issue.issue_type}`}
+                issue={issue}
+                teamSlug={teamSlug}
+                isAdmin={includeDrafts}
+              />
             ))}
           </div>
         </section>
@@ -89,15 +110,14 @@ export default async function HomePage() {
 
       {!error && allIssues.length === 0 && (
         <p className="empty-state">
-          No issues yet. Run collect, then compose (see README). Drafts appear here
-          before publish.
+          {includeDrafts
+            ? "No recaps yet. Run collect, then compose (see README). Drafts appear here before publish."
+            : "No published recaps yet."}
         </p>
       )}
 
       <footer className="site-footer">
-        <Link href="/signup">Subscribe</Link>
-        <span aria-hidden="true">·</span>
-        <Link href="/preferences">Preferences</Link>
+        <Link href="/preferences">Account</Link>
       </footer>
     </main>
   );

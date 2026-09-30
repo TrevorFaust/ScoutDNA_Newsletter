@@ -1,6 +1,9 @@
 import Link from "next/link";
+import { requireAdmin } from "@/lib/auth";
 import { createServerClient } from "@/lib/supabase";
-import { cleanCopy, formatIssueDate, statusLabel } from "@/lib/issues";
+import { formatIssueDate, statusLabel } from "@/lib/issues";
+import { displayIssueTitle } from "@/lib/issueTitle";
+import { CreateDraftsPanel } from "@/components/CreateDraftsPanel";
 import { PublishIssueForm } from "@/components/PublishIssueForm";
 import { RumorReviewPanel } from "@/components/RumorReviewPanel";
 
@@ -19,6 +22,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ReviewPage({ params }: Props) {
   const { date } = await params;
+  await requireAdmin(`/admin/review/${date}`);
   const supabase = createServerClient();
 
   const { data: issue } = await supabase
@@ -34,7 +38,7 @@ export default async function ReviewPage({ params }: Props) {
         <h1>Review</h1>
         <p>No draft for {date}.</p>
         <p>
-          <Link href="/admin/rumors">← Back to Rumors</Link>
+          <Link href="/weekly">← Back to Weekly</Link>
         </p>
       </main>
     );
@@ -43,7 +47,7 @@ export default async function ReviewPage({ params }: Props) {
   const { data: sections } = await supabase
     .from("newsletter_sections")
     .select(
-      "id, flags, activity_markdown, talk_markdown, sort_order, newsletter_teams(name, slug)"
+      "id, flags, activity_markdown, talk_markdown, intro_paragraphs, fantasy_markdown, footnotes, sort_order, newsletter_teams(name, slug)"
     )
     .eq("issue_id", issue.id)
     .order("sort_order");
@@ -55,6 +59,9 @@ export default async function ReviewPage({ params }: Props) {
       flags: (s.flags as string[]) ?? [],
       activity_markdown: s.activity_markdown as string | null,
       talk_markdown: s.talk_markdown as string | null,
+      intro_paragraphs: s.intro_paragraphs as string | null,
+      fantasy_markdown: s.fantasy_markdown as string | null,
+      footnotes: (s.footnotes as { n: number; label: string; url?: string }[] | null) ?? [],
       newsletter_teams: t,
     };
   });
@@ -78,11 +85,17 @@ export default async function ReviewPage({ params }: Props) {
       <header className="camp-admin-header">
         <div>
           <p className="camp-admin-eyebrow">
-            <Link href="/admin/rumors">Rumors</Link>
+            <Link href="/weekly">Weekly</Link>
             {" · "}
-            {issue.issue_type === "weekly" ? "Weekly" : "Daily"}
+            Review
           </p>
-          <h1>{cleanCopy(issue.title)}</h1>
+          <h1>
+            {displayIssueTitle({
+              title: issue.title,
+              issue_date: String(issue.issue_date).slice(0, 10),
+              issue_type: issue.issue_type,
+            })}
+          </h1>
           <p className="camp-admin-lead">
             {formatIssueDate(issue.issue_date)} · {statusLabel(issue.status)} ·{" "}
             {pendingRumors === 0
@@ -93,9 +106,6 @@ export default async function ReviewPage({ params }: Props) {
         <div className="rumor-review-actions">
           <Link href={`/issue/${date}`} className="btn btn-secondary">
             Preview issue
-          </Link>
-          <Link href={`/admin/drafts/${date}`} className="btn btn-secondary">
-            External drafts
           </Link>
           {issue.status !== "published" ? (
             <PublishIssueForm
@@ -111,16 +121,16 @@ export default async function ReviewPage({ params }: Props) {
 
       {pendingRumors > 0 && (
         <p className="camp-admin-muted rumor-publish-hint">
-          Clear all rumor flags before publishing, or preview the full issue first.
+          Clear all rumor flags before publishing or creating Substack and Reddit drafts.
         </p>
       )}
 
       <section className="camp-admin-card">
         <h2>Team rumors ({pendingRumors})</h2>
         <p className="camp-admin-muted">
-          Confirm keeps the Talk wording and clears the review badge. Reject
-          opens a comment box — note what to keep or cut (e.g. drop only the
-          fourth bullet), then rewrite, strip, or edit manually.
+          Confirm keeps the wording and clears the review badge. Reject
+          opens a comment box. Note what to keep or cut (for example, drop
+          only the trade note), then rewrite, strip, or edit manually.
         </p>
         <RumorReviewPanel sections={sectionRows} />
       </section>
@@ -148,21 +158,7 @@ export default async function ReviewPage({ params }: Props) {
         )}
       </section>
 
-      <section className="camp-admin-card">
-        <h2>External drafts</h2>
-        <p className="camp-admin-muted">
-          Substack and Reddit draft creation lives on its own admin page so it
-          stays available after you publish.
-        </p>
-        <div className="rumor-review-actions">
-          <Link href={`/admin/drafts/${date}`} className="btn">
-            Create Substack + Reddit drafts
-          </Link>
-          <Link href="/admin/drafts" className="btn btn-secondary">
-            All editions
-          </Link>
-        </div>
-      </section>
+      <CreateDraftsPanel issueId={issue.id} pendingRumors={pendingRumors} />
     </main>
   );
 }

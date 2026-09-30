@@ -1,15 +1,17 @@
+import { createBrowserClient as createSSRBrowserClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 
-/** Browser / public — respects RLS (published only). */
+/** Browser — session cookies via @supabase/ssr. */
 export function createBrowserClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createClient(url, key);
+  return createSSRBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 }
 
 /**
- * Server-side reads for local preview + admin.
- * Uses service role when set (bypasses RLS so drafts/in_review show).
+ * Service-role server client. Bypasses RLS.
+ * Use for published reads and for writer mutations after requireAdmin().
  */
 export function createServerClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;

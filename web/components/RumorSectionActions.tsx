@@ -2,12 +2,20 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
-import { extractRumorFromTalk } from "@/lib/rumorTalk";
+import {
+  collectRumorExcerpt,
+  usableRumorMarkdown,
+  type RumorFootnote,
+} from "@/lib/rumorTalk";
 
 type Props = {
   sectionId: string;
   flags: string[];
   talkMarkdown: string | null;
+  activityMarkdown?: string | null;
+  introMarkdown?: string | null;
+  fantasyMarkdown?: string | null;
+  footnotes?: RumorFootnote[] | null;
   editable: boolean;
   onResolved?: () => void;
 };
@@ -16,6 +24,10 @@ export function RumorSectionActions({
   sectionId,
   flags,
   talkMarkdown,
+  activityMarkdown,
+  introMarkdown,
+  fantasyMarkdown,
+  footnotes,
   editable,
   onResolved,
 }: Props) {
@@ -26,11 +38,21 @@ export function RumorSectionActions({
   const [showReject, setShowReject] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [resolution, setResolution] = useState<"remove" | "rewrite" | "manual">("rewrite");
-  const [manualTalk, setManualTalk] = useState(talkMarkdown ?? "");
+  const rumorText = collectRumorExcerpt({
+    activity: activityMarkdown,
+    talk: talkMarkdown,
+    intro: introMarkdown,
+    fantasy: fantasyMarkdown,
+    footnotes,
+  });
+  const bodySource = usableRumorMarkdown(activityMarkdown, talkMarkdown);
+  const sourceKind = bodySource ? "body" : rumorText ? "notes" : "none";
+  const [manualTalk, setManualTalk] = useState(
+    sourceKind === "notes" ? rumorText : (bodySource || talkMarkdown || "")
+  );
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
 
   const hasRumor = (flags ?? []).includes("review:rumor");
-  const rumorText = extractRumorFromTalk(talkMarkdown);
 
   useEffect(() => {
     if (!showReject) return;
@@ -75,7 +97,7 @@ export function RumorSectionActions({
       return;
     }
     if (resolution === "manual" && !manualTalk.trim()) {
-      setFeedbackError("Activity section cannot be empty.");
+      setFeedbackError("Rumor text cannot be empty.");
       return;
     }
 
@@ -97,7 +119,7 @@ export function RumorSectionActions({
         setResolution("manual");
         setManualTalk(data.talk_markdown ?? manualTalk);
         setFeedbackError(
-          "AI rewrite needs your API key or a manual edit. Edit Talk below and submit again."
+          "AI rewrite needs your API key or a manual edit. Edit the rumor text below and submit again."
         );
         return;
       }
@@ -121,7 +143,10 @@ export function RumorSectionActions({
       {rumorText ? (
         <blockquote className="rumor-actions-excerpt">{rumorText}</blockquote>
       ) : (
-        <p className="rumor-actions-empty">No rumor text found in Talk for this team.</p>
+        <p className="rumor-actions-empty">
+          Flagged for review, but this draft has no rumor sentence in the
+          section or its references. Confirm clears the badge.
+        </p>
       )}
       <div className="rumor-actions-buttons">
         <button
@@ -184,7 +209,8 @@ export function RumorSectionActions({
                 onChange={() => setResolution("rewrite")}
               />
               <span>
-                Rewrite Talk from this comment (AI) — best for partial keeps
+                Rewrite from this comment (AI). Best when you want to keep
+                part of it.
               </span>
             </label>
             <label>
@@ -194,7 +220,7 @@ export function RumorSectionActions({
                 checked={resolution === "remove"}
                 onChange={() => setResolution("remove")}
               />
-              <span>Strip the whole rumor block from Talk</span>
+              <span>Strip the rumor</span>
             </label>
             <label>
               <input
@@ -203,10 +229,12 @@ export function RumorSectionActions({
                 checked={resolution === "manual"}
                 onChange={() => {
                   setResolution("manual");
-                  setManualTalk(talkMarkdown ?? "");
+                  setManualTalk(
+                    sourceKind === "notes" ? rumorText : bodySource || talkMarkdown || ""
+                  );
                 }}
               />
-              <span>Edit Talk manually</span>
+              <span>Edit the rumor text manually</span>
             </label>
           </fieldset>
 
@@ -215,7 +243,7 @@ export function RumorSectionActions({
               value={manualTalk}
               onChange={(e) => setManualTalk(e.target.value)}
               rows={8}
-              aria-label="Edit Talk markdown"
+              aria-label="Edit rumor text"
               className="rumor-reject-manual"
             />
           )}

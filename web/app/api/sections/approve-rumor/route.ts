@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireAdminApi } from "@/lib/auth";
 import {
-  rumorSourceMarkdown,
+  applyRumorFootnoteEdits,
+  cleanRumorLabel,
+  dropRumorFootnotes,
+  rumorFootnoteLines,
   stripReviewMetaFromTalk,
   stripRumorFromTalk,
+  usableRumorMarkdown,
+  type RumorFootnote,
 } from "@/lib/rumorTalk";
 
 function supabaseAdmin() {
@@ -61,6 +67,39 @@ ${body}`,
   return text || null;
 }
 
+async function rewriteNotesWithFeedback(
+  lines: string,
+  feedback: string
+): Promise<string | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+
+  const model = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-6";
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 800,
+      messages: [
+        {
+          role: "user",
+          content: `Edit these NFL newsletter rumor reference lines per the editor comment. Each line is "n. label". Keep a line's number when you keep it. Delete a line only when the editor wants that rumor gone. Do not invent new rumors. Do not add "review:rumor". Return ONLY the revised lines.\n\nEditor comment:\n${feedback}\n\nLines:\n${lines}`,
+        },
+      ],
+    }),
+  });
+
+  if (!res.ok) return null;
+  const data = await res.json();
+  const text = data.content?.[0]?.text?.trim();
+  return text || null;
+}
+
 async function rewriteBodyWithFeedback(
   body: string,
   feedback: string
@@ -95,6 +134,9 @@ async function rewriteBodyWithFeedback(
 }
 
 export async function POST(req: NextRequest) {
+  const gate = await requireAdminApi();
+  if (!gate.ok) return gate.response;
+
   const body = await req.json().catch(() => null);
   const sectionId = body?.sectionId as string | undefined;
   const action = (body?.action as string | undefined) ?? "approve";
@@ -118,7 +160,9 @@ export async function POST(req: NextRequest) {
 
   const { data: section, error: fetchErr } = await supabase
     .from("newsletter_sections")
-    .select("id, flags, activity_markdown, talk_markdown")
+    .select(
+      "id, flags, activity_markdown, talk_markdown, intro_paragraphs, fantasy_markdown, footnotes"
+    )
     .eq("id", sectionId)
     .maybeSingle();
 
@@ -127,15 +171,27 @@ export async function POST(req: NextRequest) {
   }
 
   let flags = clearRumorFlag((section.flags as string[]) ?? []);
-  let markdown = rumorSourceMarkdown(
-    section.activity_markdown as string | null,
-    section.talk_markdown as string | null
+  const activity = section.activity_markdown as string | null;
+  const talk = section.talk_markdown as string | null;
+  const intro = (section.intro_paragraphs as string | null) ?? "";
+  const fantasy = (section.fantasy_markdown as string | null) ?? "";
+  let footnotes = ((section.footnotes as RumorFootnote[] | null) ?? []).map(
+    (fn) => ({ ...fn, label: fn.label ?? "" })
   );
+  const bodySource = usableRumorMarkdown(activity, talk);
+  const citedIn = [intro, fantasy, bodySource].filter(Boolean).join("\n");
+  let markdown = bodySource;
 
   if (action === "approve") {
     flags.push("rumor:approved");
-    const polished = await polishApprovedRumorBody(markdown);
-    markdown = stripReviewMetaFromTalk(polished ?? markdown);
+    footnotes = footnotes.map((fn) => ({
+      ...fn,
+      label: cleanRumorLabel(fn.label),
+    }));
+    if (bodySource) {
+      const polished = await polishApprovedRumorBody(bodySource);
+      markdown = stripReviewMetaFromTalk(polished ?? bodySource);
+    }
   } else {
     const feedback = (body?.feedback as string | undefined)?.trim();
     const resolution = body?.resolution as "remove" | "rewrite" | "manual" | undefined;
@@ -149,30 +205,57 @@ export async function POST(req: NextRequest) {
     }
     if (resolution === "manual" && (talkOverride == null || !String(talkOverride).trim())) {
       return NextResponse.json(
-        { error: "Activity override required for manual reject." },
+        { error: "Rumor text is required for a manual edit." },
         { status: 400 }
       );
     }
 
+    const noteLines = rumorFootnoteLines(footnotes).join("\n");
+
     if (resolution === "remove") {
-      markdown = stripRumorFromTalk(markdown);
+      if (bodySource) markdown = stripRumorFromTalk(bodySource);
+      footnotes = dropRumorFootnotes(footnotes, citedIn).map((fn) => ({
+        ...fn,
+        label: cleanRumorLabel(fn.label),
+      }));
     } else if (resolution === "manual") {
-      markdown = talkOverride as string;
-    } else if (resolution === "rewrite") {
-      const rewritten = await rewriteBodyWithFeedback(markdown, feedback!);
-      if (!rewritten) {
-        return NextResponse.json(
-          {
-            error:
-              "AI rewrite unavailable. Use manual edit: paste revised Activity markdown.",
-            needsManual: true,
-            talk_markdown: markdown,
-            activity_markdown: markdown,
-          },
-          { status: 422 }
-        );
+      if (bodySource) {
+        markdown = talkOverride as string;
+      } else {
+        footnotes = applyRumorFootnoteEdits(footnotes, talkOverride as string, citedIn);
       }
-      markdown = rewritten;
+    } else if (resolution === "rewrite") {
+      if (bodySource) {
+        const rewritten = await rewriteBodyWithFeedback(bodySource, feedback!);
+        if (!rewritten) {
+          return NextResponse.json(
+            {
+              error:
+                "AI rewrite unavailable. Use manual edit and paste the revised rumor text.",
+              needsManual: true,
+              talk_markdown: bodySource,
+              activity_markdown: bodySource,
+            },
+            { status: 422 }
+          );
+        }
+        markdown = rewritten;
+      } else if (noteLines) {
+        const rewritten = await rewriteNotesWithFeedback(noteLines, feedback!);
+        if (!rewritten || !/^\d+\.\s+/m.test(rewritten)) {
+          return NextResponse.json(
+            {
+              error:
+                "AI rewrite unavailable. Use manual edit and paste the revised rumor lines.",
+              needsManual: true,
+              talk_markdown: rewritten || noteLines,
+              activity_markdown: rewritten || noteLines,
+            },
+            { status: 422 }
+          );
+        }
+        footnotes = applyRumorFootnoteEdits(footnotes, rewritten, citedIn);
+      }
     } else {
       return NextResponse.json(
         { error: "resolution must be remove, rewrite, or manual" },
@@ -180,7 +263,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    markdown = stripReviewMetaFromTalk(markdown);
+    if (bodySource) markdown = stripReviewMetaFromTalk(markdown);
     flags.push("rumor:rejected");
   }
 
@@ -192,13 +275,23 @@ export async function POST(req: NextRequest) {
     flags.push("rumor:rejected");
   }
 
+  const updatePayload: {
+    flags: string[];
+    talk_markdown: string;
+    footnotes: RumorFootnote[];
+    activity_markdown?: string | null;
+  } = {
+    flags,
+    talk_markdown: "",
+    footnotes,
+  };
+  if (bodySource) {
+    updatePayload.activity_markdown = markdown || null;
+  }
+
   const { data: updated, error: updateErr } = await supabase
     .from("newsletter_sections")
-    .update({
-      flags,
-      activity_markdown: markdown || null,
-      talk_markdown: "",
-    })
+    .update(updatePayload)
     .eq("id", sectionId)
     .select("id, flags, activity_markdown, talk_markdown")
     .maybeSingle();

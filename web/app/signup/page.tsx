@@ -1,55 +1,31 @@
-"use client";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { AuthForm } from "@/components/AuthForm";
+import { getViewer } from "@/lib/auth";
 
-import { useState } from "react";
-import teamsData from "../../../data/teams.json";
-import { createBrowserClient } from "@/lib/supabase";
+export const metadata = {
+  title: "Create account | ScoutDNA: All 32",
+};
 
-export default function SignupPage() {
-  const [email, setEmail] = useState("");
-  const [team, setTeam] = useState("");
-  const [frequency, setFrequency] = useState("daily");
-  const [message, setMessage] = useState("");
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const supabase = createBrowserClient();
-    const { error } = await supabase.from("newsletter_subscribers").insert({
-      email,
-      favorite_team_slug: team || null,
-      frequency,
-    });
-    setMessage(error ? error.message : "Subscribed! Check your inbox when email is enabled.");
+export default async function SignupPage() {
+  const viewer = await getViewer();
+  if (viewer) {
+    redirect(viewer.favoriteTeamSlug ? "/" : "/welcome");
   }
 
   return (
-    <main>
-      <h1>Subscribe</h1>
-      <p style={{ color: "var(--muted)" }}>
-        Email delivery is Phase 2 (Resend). Your preferences are saved now.
+    <main className="auth-page">
+      <header className="page-header">
+        <h1>Create an account</h1>
+        <p className="page-lead">
+          After you sign in the first time, you pick a favorite team. Recaps
+          jump to that club. Writing and review stay with the editor.
+        </p>
+      </header>
+      <AuthForm mode="signup" next="/welcome" />
+      <p className="auth-switch">
+        Already have an account? <Link href="/signin">Sign in</Link>
       </p>
-      <form onSubmit={onSubmit}>
-        <label>Email</label>
-        <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-        <label>Favorite team (optional)</label>
-        <select value={team} onChange={(e) => setTeam(e.target.value)}>
-          <option value="">Top of newsletter</option>
-          {(teamsData as { slug: string; name: string }[]).map((t) => (
-            <option key={t.slug} value={t.slug}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-        <label>Frequency</label>
-        <select value={frequency} onChange={(e) => setFrequency(e.target.value)}>
-          <option value="daily">Daily</option>
-          <option value="weekly">Weekly (Tuesday)</option>
-          <option value="both">Both</option>
-        </select>
-        <button type="submit" className="btn">
-          Save preferences
-        </button>
-      </form>
-      {message && <p>{message}</p>}
     </main>
   );
 }

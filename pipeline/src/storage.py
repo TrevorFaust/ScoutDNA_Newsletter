@@ -168,8 +168,8 @@ def _issue_title(issue_date: date, issue_type: str) -> str:
     if issue_type == "weekly":
         from .weekly_window import recap_label
 
-        return f"ScoutDNA: All 32, {recap_label(issue_date)}"
-    return f"ScoutDNA: All 32, {issue_date.strftime('%B %d, %Y')}"
+        return recap_label(issue_date)
+    return issue_date.strftime("%B %d, %Y")
 
 
 def fetch_daily_issues_with_sections(issue_dates: list[date]) -> dict[str, dict]:

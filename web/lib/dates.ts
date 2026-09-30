@@ -109,11 +109,24 @@ export function nflWeekNumber(weeklyIssueDate: string): number | null {
   return 1 + Math.floor(delta / 7);
 }
 
-/** Display title: "Week 1 recap" in season, date range in preseason. */
+/** Display title: "Week 1 Recap" in season, date range in preseason. */
 export function recapLabel(weeklyIssueDate: string): string {
   const n = nflWeekNumber(weeklyIssueDate);
-  if (n) return `Week ${n} recap`;
+  if (n) return `Week ${n} Recap`;
   return weekRangeLabel(weeklyIssueDate);
+}
+
+/** Short index-tab label: "Week 3" in season, "Sep 7–13" in preseason. */
+export function weekTabLabel(weeklyIssueDate: string): string {
+  const n = nflWeekNumber(weeklyIssueDate);
+  if (n) return `Week ${n}`;
+  const { weekStart, weekEnd } = weekContentRange(weeklyIssueDate);
+  const start = `${MONTH_SHORT[weekStart.m - 1]} ${weekStart.d}`;
+  const end =
+    weekStart.m === weekEnd.m
+      ? String(weekEnd.d)
+      : `${MONTH_SHORT[weekEnd.m - 1]} ${weekEnd.d}`;
+  return `${start}–${end}`;
 }
 
 export function weeklyEditionLabel(weeklyIssueDate: string): string {
@@ -126,6 +139,6 @@ export function weekRecapSubtitle(weeklyIssueDate: string): string {
     `${WEEKDAY_SHORT[utcWeekday(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`)]}, ${MONTH_SHORT[m - 1]} ${d}`;
   const range = `${fmt(weekStart)} through ${fmt(weekEnd)}`;
   const n = nflWeekNumber(weeklyIssueDate);
-  if (n) return `Week ${n} recap · ${range}`;
+  if (n) return `Week ${n} Recap · ${range}`;
   return `Week in review: ${range}`;
 }

@@ -39,10 +39,10 @@ def nfl_week_number(weekly_issue_date: date) -> int | None:
 
 
 def recap_label(weekly_issue_date: date) -> str:
-    """Display title: 'Week 1 recap' in season, date range in preseason."""
+    """Display title: 'Week 1 Recap' in season, date range in preseason."""
     n = nfl_week_number(weekly_issue_date)
     if n:
-        return f"Week {n} recap"
+        return f"Week {n} Recap"
     return week_range_label(weekly_issue_date)
 
 

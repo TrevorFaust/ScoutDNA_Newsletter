@@ -13,6 +13,13 @@ export function getTeams(): TeamRow[] {
   return teamsData as TeamRow[];
 }
 
+/** ESPN logo file codes. Washington is wsh, not was. */
+export function espnLogoAbbr(abbrev: string): string {
+  const key = abbrev.toLowerCase();
+  if (key === "was" || key === "wsh") return "wsh";
+  return key;
+}
+
 export type TeamNameLexicon = {
   /** Full franchise names, longest first (e.g. "Washington Commanders"). */
   fullNames: string[];
@@ -64,4 +71,21 @@ export function getDivisionGroups(): Record<string, TeamRow[]> {
     (grouped[key] ??= []).push(t);
   }
   return grouped;
+}
+
+export type ConferenceBlock = {
+  conference: "AFC" | "NFC";
+  divisions: { name: string; teams: TeamRow[] }[];
+};
+
+export function getConferenceBlocks(): ConferenceBlock[] {
+  const grouped = getDivisionGroups();
+  const divisions = ["East", "North", "South", "West"] as const;
+  return (["AFC", "NFC"] as const).map((conference) => ({
+    conference,
+    divisions: divisions.map((division) => ({
+      name: division,
+      teams: grouped[`${conference} ${division}`] ?? [],
+    })),
+  }));
 }

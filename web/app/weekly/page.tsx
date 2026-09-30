@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { IssueList } from "@/components/IssueList";
-import { fetchIssues, fetchLatestIssue } from "@/lib/issues";
+import { EditionTicket } from "@/components/EditionTicket";
+import { WeeklyReel } from "@/components/WeeklyReel";
+import { getViewer } from "@/lib/auth";
+import { fetchWeeklyReel } from "@/lib/issues";
 
 export const metadata = {
   title: "Week recaps | ScoutDNA: All 32",
@@ -8,34 +10,34 @@ export const metadata = {
 };
 
 export default async function WeeklyPage() {
-  const [{ issues, error }, latest] = await Promise.all([
-    fetchIssues("weekly"),
-    fetchLatestIssue("weekly"),
-  ]);
+  const viewer = await getViewer();
+  const includeDrafts = Boolean(viewer?.isAdmin);
+  const teamSlug = viewer?.favoriteTeamSlug ?? undefined;
 
-  const published = issues.filter((i) => i.status === "published").length;
+  const { items, error } = await fetchWeeklyReel({
+    teamSlug,
+    includeDrafts,
+  });
+  const [latest, ...earlier] = items;
 
   return (
-    <main>
+    <main className="weekly-page">
       <nav className="breadcrumb" aria-label="Breadcrumb">
         <Link href="/">Home</Link>
         <span aria-hidden="true">/</span>
         <span aria-current="page">Weekly</span>
       </nav>
 
-      <header className="page-header">
+      <header className="page-header page-header-center">
         <span className="edition-badge edition-weekly">Week recaps</span>
         <h1>Week recaps</h1>
-        <p className="page-lead">
-          Tuesday recaps after Monday Night Football, titled Week 1 recap, Week 2
-          recap, and so on. Boxes, what moved, team by team, with the same cited
-          structure as the daily digest.
+        <p className="page-lead weekly-lead">
+          Monday night ends and by Tuesday morning, all 32 teams have their week
+          on paper: the results, the injuries, who got the work, and what the
+          reporting says comes next. Pull an older week and hold it up against
+          this one. See who kept the job, which rumors turned into moves, and
+          which ones went quiet.
         </p>
-        {latest && (
-          <Link href={`/issue/${latest.slug}`} className="btn btn-primary">
-            Read latest weekly
-          </Link>
-        )}
       </header>
 
       {error && (
@@ -44,15 +46,31 @@ export default async function WeeklyPage() {
         </p>
       )}
 
-      <div className="archive-stats">
-        <span>{issues.length} total</span>
-        <span>{published} published</span>
-      </div>
+      {latest ? (
+        <>
+          <section className="weekly-shelf" aria-labelledby="weekly-latest-label">
+            <h2 id="weekly-latest-label" className="weekly-shelf-label">
+              This week
+            </h2>
+            <article className="ticket-featured">
+              <EditionTicket item={latest} isAdmin={includeDrafts} />
+            </article>
+          </section>
 
-      <IssueList
-        issues={issues}
-        emptyMessage="No weekly issues yet. Week recaps compose on Tuesdays after the 3am PT nflverse sync."
-      />
+          {earlier.length > 0 ? (
+            <section className="weekly-shelf" aria-labelledby="weekly-earlier-label">
+              <h2 id="weekly-earlier-label" className="weekly-shelf-label">
+                Earlier weeks
+              </h2>
+              <WeeklyReel items={earlier} isAdmin={includeDrafts} />
+            </section>
+          ) : null}
+        </>
+      ) : (
+        <p className="empty-state">
+          No weekly issues yet. Week recaps compose on Tuesdays after the 3am PT nflverse sync.
+        </p>
+      )}
     </main>
   );
 }

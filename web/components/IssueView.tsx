@@ -9,6 +9,7 @@ import { ReferencesDropdown } from "@/components/ReferencesDropdown";
 import { TeamSectionBody } from "@/components/TeamSectionBody";
 import { cleanCopy } from "@/lib/cleanCopy";
 import { recapLabel } from "@/lib/dates";
+import { displayIssueTitle, issueHook } from "@/lib/issueTitle";
 import { type AdjacentIssue } from "@/lib/issues";
 import { getDivisionGroups } from "@/lib/teams";
 import { hasPendingRumorFlag } from "@/lib/rumorTalk";
@@ -47,6 +48,7 @@ type Props = {
   /** Week skill usage keyed by team abbrev (LAR/ARI/WAS). Weekly REG only. */
   usageByTeam?: Record<string, import("@/lib/playerUsage").PlayerWeekUsage[]>;
   usageWeekLabel?: string;
+  isAdmin?: boolean;
 };
 
 export function IssueView({
@@ -64,6 +66,7 @@ export function IssueView({
   adjacentNext = null,
   usageByTeam,
   usageWeekLabel,
+  isAdmin = false,
 }: Props) {
   const hasContent = sections.some(
     (s) => s.intro_paragraphs || s.activity_markdown || s.fantasy_markdown
@@ -79,15 +82,25 @@ export function IssueView({
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [favoriteTeamSlug]);
 
-  const editionHref = issueType === "weekly" ? "/weekly" : "/daily";
+  const editionHref = "/weekly";
+  const dateIso = issueDate?.slice(0, 10) || "";
   const editionLabel =
-    issueType === "weekly" && issueDate ? recapLabel(issueDate) : issueType === "weekly" ? "Weekly" : "Daily";
+    issueType === "weekly" && dateIso ? recapLabel(dateIso) : "Weekly";
+  const heading = displayIssueTitle({
+    title,
+    issue_date: dateIso,
+    issue_type: issueType,
+  });
+  const hook = dateIso
+    ? issueHook({ title, issue_date: dateIso, issue_type: issueType })
+    : null;
   const canPublish =
+    isAdmin &&
     Boolean(issueId && issueDate) &&
     (status === "in_review" || status === "approved" || status === "draft");
 
   return (
-    <main>
+    <main className="issue-page">
       <nav className="breadcrumb" aria-label="Breadcrumb">
         <Link href="/">Home</Link>
         <span aria-hidden="true">/</span>
@@ -99,15 +112,16 @@ export function IssueView({
       <div className="issue-header">
         <div className="issue-header-text">
           <span className={`edition-badge edition-${issueType}`}>{editionLabel} Edition</span>
-          <h1>{cleanCopy(title)}</h1>
+          <h1>{heading}</h1>
+          {hook ? <p className="issue-hook">{hook}</p> : null}
         </div>
-        {issueId && issueDate && (canPublish || status === "published") ? (
+        {isAdmin && issueId && issueDate && (canPublish || status === "published") ? (
           <div className="issue-header-actions">
             {canPublish ? (
               <PublishIssueForm issueId={issueId} slug={issueDate} />
             ) : null}
-            <Link href={`/admin/drafts/${issueDate}`} className="btn btn-secondary">
-              External drafts
+            <Link href={`/admin/review/${issueDate}`} className="btn btn-secondary">
+              Review
             </Link>
           </div>
         ) : null}
@@ -124,14 +138,15 @@ export function IssueView({
           Status: <strong>{status}</strong>
         </p>
       )}
-      {status === "in_review" &&
+      {isAdmin &&
+        status === "in_review" &&
         issueDate &&
         sections.some((s) => hasPendingRumorFlag(s.flags)) && (
           <p className="issue-rumor-review-link">
             <Link href={`/admin/review/${issueDate}`}>
-              Review rumors in Rumors tab (
+              Open review (
               {sections.filter((s) => hasPendingRumorFlag(s.flags)).length}{" "}
-              pending) — confirm/reject there, not in this writeup
+              pending rumors). Confirm or reject there, then create drafts.
             </Link>
           </p>
         )}

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireAdmin } from "@/lib/auth";
 import { CampProposalCard } from "@/components/CampProposalActions";
 import {
   buildSlotMomentum,
@@ -30,6 +31,7 @@ export default async function CampSignalsAdminPage({
   searchParams: Promise<{ team?: string }>;
 }) {
   const params = await searchParams;
+  await requireAdmin("/admin/camp-signals");
   const team = params.team?.toUpperCase() || null;
   const teams = getTeams();
 

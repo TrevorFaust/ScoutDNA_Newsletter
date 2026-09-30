@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { createServerClient } from "@/lib/supabase";
 
 const DEFAULT_SNOOZE_DAYS = 3;
 
 export async function POST(req: NextRequest) {
+  const gate = await requireAdminApi();
+  if (!gate.ok) return gate.response;
+
   const body = await req.json().catch(() => null);
   const proposalId = body?.proposalId as string | undefined;
   const days = Number(body?.days) > 0 ? Number(body.days) : DEFAULT_SNOOZE_DAYS;

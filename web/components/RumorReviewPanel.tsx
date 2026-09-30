@@ -3,11 +3,16 @@
 import { useState } from "react";
 import { RumorSectionActions } from "@/components/RumorSectionActions";
 
+type Footnote = { n: number; label: string; url?: string };
+
 type SectionRow = {
   id: string;
   flags: string[];
   activity_markdown?: string | null;
   talk_markdown: string | null;
+  intro_paragraphs?: string | null;
+  fantasy_markdown?: string | null;
+  footnotes?: Footnote[] | null;
   newsletter_teams: { name: string; slug: string };
 };
 
@@ -39,7 +44,11 @@ export function RumorReviewPanel({ sections }: { sections: SectionRow[] }) {
           <RumorSectionActions
             sectionId={s.id}
             flags={s.flags}
-            talkMarkdown={s.activity_markdown?.trim() ? s.activity_markdown : s.talk_markdown}
+            talkMarkdown={s.talk_markdown}
+            activityMarkdown={s.activity_markdown}
+            introMarkdown={s.intro_paragraphs}
+            fantasyMarkdown={s.fantasy_markdown}
+            footnotes={s.footnotes}
             editable
             onResolved={() =>
               setDismissed((prev) => {

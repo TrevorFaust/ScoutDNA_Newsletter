@@ -39,14 +39,14 @@ Scheduled GitHub Actions (and/or a local Windows Task Scheduler job) run collect
 ### Live now (camp / preseason 2026)
 
 - **Uniform team shape.** Intro + Activity + Fantasy lens on every club. Talk is gone. Quotes that name a starter, injury, or role fold into Activity (or the intro if they are the lead).
-- **Skill usage.** nflverse weekly stats and snap counts sync into `player_week_usage`. Game scores and yards allowed land in `team_week_results`. Regular-season compose leads with those boxes. `/admin/usage` is the board.
+- **Skill usage.** nflverse weekly stats and snap counts sync into `player_week_usage`. Game scores and yards allowed land in `team_week_results`. Regular-season compose leads with those boxes. `/admin/usage` is the public board: team logos, stat definitions on tap, and FPts in PPR, half PPR, or standard (derived from receptions).
 - **Injuries.** ESPN's injury board syncs into `player_injury_status` (`.\scripts\sync_injuries.ps1`, also before weekly compose) and feeds `injury_status` into team prompts for Week N exits and Week N+1 availability.
 - **Camp signals.** Daily extract → rolling slot scores → battle *proposals*. Nothing writes to `fantasy_position_battles` until you approve it at `/admin/camp-signals`.
-- **Rumor queue.** `/admin/rumors` lists editions with pending flags. `/admin/review/{slug}` is confirm / reject without reading the whole issue first.
-- **External drafts.** Review page can open a Substack draft and Reddit drafts aimed at each team subreddit. Flag: `EXTERNAL_DRAFTS_ENABLED`. Setup: [docs/EXTERNAL_DRAFTS.md](./docs/EXTERNAL_DRAFTS.md).
+- **Sign-in.** Readers create an account, pick a favorite team on first sign-in, and recaps open on that club. `ADMIN_EMAILS` in `web/.env.local` is the only account that can review rumors, approve camp signals, publish, or upload Substack / Reddit drafts. Desk: `/admin`.
+- **Review desk.** `/admin/review/{slug}` is rumors, flags, publish, and Substack / Reddit drafts in one place. Open it from the desk or an unpublished issue. Flag: `EXTERNAL_DRAFTS_ENABLED`. Setup: [docs/EXTERNAL_DRAFTS.md](./docs/EXTERNAL_DRAFTS.md).
 - **nflverse context.** Rosters, depth, coaching, draft capital, and usage refresh on a daily Action (`.github/workflows/sync_nflverse.yml`). Local: `.\scripts\sync_nflverse.ps1`.
 - **Position battles.** Editorial seed in `data/fantasy_position_battles_2026.csv` (settled vs contested vs open). Compose reads that map next to DraftDNA depth order.
-- **Team archive.** `/team/{slug}` keeps a club's sections across issues. Public site also has Daily, Weekly, and a team directory.
+- **Team archive.** `/team/{slug}` keeps a club's sections across issues. Public site has Home, Weekly, Usage, and a team directory. Weekly shows the latest recap as a ticket stub, with earlier weeks in a rolodex you can flip with the scroll wheel, arrows, or swipe.
 
 ### Editor loop
 
@@ -56,12 +56,12 @@ Scheduled GitHub Actions (and/or a local Windows Task Scheduler job) run collect
 4. Check `/admin/camp-signals` if a WR2 or RB2 fight has enough days of the same direction to propose a settle.
 5. **Approve & publish** for the site, then **Create Substack + Reddit drafts** if you want those queues filled.
 
-`web/.env.local` needs `SUPABASE_SERVICE_ROLE_KEY` for review, usage, and camp admin.
+`web/.env.local` needs `SUPABASE_SERVICE_ROLE_KEY` for review, usage, and camp admin, plus `ADMIN_EMAILS` (your login email) so only you can open the desk. In the Supabase project, enable Email auth and add `{SITE_URL}/auth/callback` to Redirect URLs.
 
 ### Stack at a glance
 
 - **Python pipeline:** collectors, clustering, compose, nflverse / ESPN usage, camp signals, Supabase storage
-- **Next.js web:** public issues, team archives, rumor / usage / camp admin, draft export
+- **Next.js web:** public issues, signed-in team preference, team archives, editor-only rumor / camp / draft desk, usage board
 - **Supabase:** shared DraftDNA DB (`paveh`): teams, raw items, drafts, published issues, usage, signals
 
 **URL slug:** `scoutdna-all-32` (e.g. `/issue/2026-08-24-weekly`)
@@ -124,8 +124,9 @@ npm run dev
 ```
 
 - Public issue: `http://localhost:3000/issue/2026-08-24-weekly`
+- Sign in: `http://localhost:3000/signin`
+- Editor desk: `http://localhost:3000/admin`
 - Review draft: `http://localhost:3000/admin/review/2026-08-24-weekly`
-- Rumors: `http://localhost:3000/admin/rumors`
 - Usage: `http://localhost:3000/admin/usage`
 - Camp signals: `http://localhost:3000/admin/camp-signals`
 
@@ -189,6 +190,6 @@ docs/              # Setup notes (YouTube, camp signals, external drafts, …)
 
 ## Roadmap
 
-- **Shipping:** Reddit + RSS + media collect, Tuesday weekly compose, review UI, HTML publish, team archives, usage board, camp-signal proposals, rumor queue, Substack/Reddit draft export
-- **Next:** Resend email, subscriber preferences
+- **Shipping:** Reddit + RSS + media collect, Tuesday weekly compose, review UI, HTML publish, team archives, usage board, camp-signal proposals, rumor queue, Substack/Reddit draft export, sign-in with favorite-team onboarding, editor-only desk
+- **Next:** Resend email
 - **Later:** Glossary tooltips, more media sources

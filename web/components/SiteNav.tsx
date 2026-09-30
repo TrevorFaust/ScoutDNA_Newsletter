@@ -2,21 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { Viewer } from "@/lib/auth";
 import { getDivisionGroups } from "@/lib/teams";
 
 const SIMPLE_LINKS = [
   { href: "/", label: "Home", match: (p: string) => p === "/" },
-  { href: "/daily", label: "Daily", match: (p: string) => p.startsWith("/daily") },
-  { href: "/weekly", label: "Weekly", match: (p: string) => p.startsWith("/weekly") },
   {
-    href: "/admin/rumors",
-    label: "Rumors",
-    match: (p: string) => p.startsWith("/admin/rumors") || p.startsWith("/admin/review"),
-  },
-  {
-    href: "/admin/drafts",
-    label: "Drafts",
-    match: (p: string) => p.startsWith("/admin/drafts"),
+    href: "/weekly",
+    label: "Weekly",
+    match: (p: string) =>
+      p.startsWith("/weekly") || p.startsWith("/issue") || p.startsWith("/admin/review"),
   },
   {
     href: "/admin/usage",
@@ -29,7 +24,11 @@ function isTeamsActive(pathname: string) {
   return pathname.startsWith("/team");
 }
 
-export function SiteNav() {
+type Props = {
+  viewer?: Viewer | null;
+};
+
+export function SiteNav({ viewer = null }: Props) {
   const pathname = usePathname();
   const divisions = getDivisionGroups();
 
@@ -81,9 +80,38 @@ export function SiteNav() {
         </div>
       </div>
 
-      <Link href="/signup" className="site-nav-cta">
-        Subscribe
-      </Link>
+      {viewer?.isAdmin ? (
+        <Link
+          href="/admin"
+          className={
+            pathname === "/admin" || pathname.startsWith("/admin/review") || pathname.startsWith("/admin/camp")
+              ? "site-nav-link active"
+              : "site-nav-link"
+          }
+        >
+          Desk
+        </Link>
+      ) : null}
+
+      {viewer ? (
+        <>
+          <Link
+            href="/preferences"
+            className={pathname.startsWith("/preferences") ? "site-nav-link active" : "site-nav-link"}
+          >
+            Account
+          </Link>
+          <form action="/auth/signout" method="post" className="site-nav-signout">
+            <button type="submit" className="site-nav-link site-nav-signout-btn">
+              Sign out
+            </button>
+          </form>
+        </>
+      ) : (
+        <Link href="/signin" className="site-nav-cta">
+          Sign in
+        </Link>
+      )}
     </nav>
   );
 }

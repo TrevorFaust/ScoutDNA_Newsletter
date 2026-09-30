@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireAdminApi } from "@/lib/auth";
 import { formatIssueDate } from "@/lib/dates";
 import { cleanCopy } from "@/lib/issues";
 import {
@@ -53,6 +54,9 @@ function teamFromJoin(raw: unknown): ExportSection["teams"] {
 }
 
 export async function POST(req: NextRequest) {
+  const gate = await requireAdminApi();
+  if (!gate.ok) return gate.response;
+
   if (process.env.EXTERNAL_DRAFTS_ENABLED?.toLowerCase() !== "true") {
     return NextResponse.json(
       {

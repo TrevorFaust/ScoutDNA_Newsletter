@@ -26,6 +26,14 @@ Also copy the **same** Supabase URL + anon key into `web/.env.local` for the web
 - `anon` = safe for the browser (Next.js)
 - `service_role` = full database access — **never** commit or put in client code; only pipeline + server publish route
 
+### Editor login (`web/.env.local`)
+
+```env
+ADMIN_EMAILS=you@example.com
+```
+
+Only those emails can open `/admin`, review rumors, approve camp signals, publish, or create Substack / Reddit drafts. In Supabase: Authentication → URL Configuration, set Site URL to `NEXT_PUBLIC_SITE_URL` and add `{SITE_URL}/auth/callback` to Redirect URLs.
+
 ### Run migrations (one time)
 
 1. In Supabase: **SQL Editor** → **New query**

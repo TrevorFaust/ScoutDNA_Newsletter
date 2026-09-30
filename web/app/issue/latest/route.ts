@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getViewer } from "@/lib/auth";
 import { fetchLatestIssue } from "@/lib/issues";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const team = searchParams.get("team");
   const type = searchParams.get("type");
+  const viewer = await getViewer();
 
   const issueType = type === "weekly" ? "weekly" : type === "daily" ? "daily" : undefined;
   const latest = await fetchLatestIssue(issueType, true);
 
   if (!latest) {
-    const fallback = await fetchLatestIssue(issueType, false);
+    const fallback = viewer?.isAdmin
+      ? await fetchLatestIssue(issueType, false)
+      : null;
     if (!fallback) {
       return NextResponse.redirect(new URL("/", request.url));
     }

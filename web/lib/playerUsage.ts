@@ -45,10 +45,12 @@ export type UsageFlag =
   | "wr_target_split"
   | "te_featured";
 
+export type UsageWeek = number | "all";
+
 export type UsageFilters = {
   season: number;
   seasonType: UsageSeasonType;
-  week: number | null;
+  week: UsageWeek | null;
   team: string | null;
 };
 
@@ -216,10 +218,22 @@ function weekKey(team: string, week: number) {
   return `${team}:${week}`;
 }
 
+type TeamTotals = {
+  carries: number;
+  targets: number;
+  air: number;
+  snaps: number;
+  rbCarries: number;
+};
+
+function emptyTotals(): TeamTotals {
+  return { carries: 0, targets: 0, air: 0, snaps: 0, rbCarries: 0 };
+}
+
 function impliedTeamSnaps(row: PlayerWeekUsage): number | null {
   const snaps = row.offense_snaps;
   const pct = row.snap_pct;
-  if (snaps == null || pct == null || pct <= 0) return null;
+  if (snaps == null || snaps <= 0 || pct == null || pct <= 0) return null;
   return snaps / (pct / 100);
 }
 
@@ -228,49 +242,43 @@ function impliedTeamSnaps(row: PlayerWeekUsage): number | null {
  * Averaging weekly snap% inflated backups who only played one game at a high rate.
  */
 export function seasonToDate(rows: PlayerWeekUsage[]): PlayerWeekUsage[] {
-  const teamWeek = new Map<
-    string,
-    { carries: number; targets: number; air: number; snaps: number }
-  >();
+  const teamWeek = new Map<string, TeamTotals & { anchorSnaps: number }>();
 
   for (const row of rows) {
     const key = weekKey(row.team_abbr, row.week);
-    const cur = teamWeek.get(key) ?? {
-      carries: 0,
-      targets: 0,
-      air: 0,
-      snaps: 0,
-    };
+    const cur = teamWeek.get(key) ?? { ...emptyTotals(), anchorSnaps: 0 };
     if (row.team_carries != null) cur.carries = Number(row.team_carries);
     if (row.team_targets != null) cur.targets = Number(row.team_targets);
     if (row.team_air_yards != null) cur.air = Number(row.team_air_yards);
+    // Team snaps come from the fullest sample that week. A 1-snap backup
+    // rounded to 1% would otherwise imply a huge snap count.
+    const snaps = Number(row.offense_snaps) || 0;
     const implied = impliedTeamSnaps(row);
-    if (implied != null && implied > cur.snaps) cur.snaps = implied;
+    if (implied != null && snaps >= cur.anchorSnaps) {
+      cur.anchorSnaps = snaps;
+      cur.snaps = implied;
+    }
+    if ((row.position || "").toUpperCase() === "RB") {
+      cur.rbCarries += Number(row.carries) || 0;
+    }
     teamWeek.set(key, cur);
   }
 
-  const teamSeason = new Map<
-    string,
-    { carries: number; targets: number; air: number; snaps: number }
-  >();
+  const teamSeason = new Map<string, TeamTotals>();
   for (const [key, week] of teamWeek) {
     const team = key.split(":")[0];
-    const cur = teamSeason.get(team) ?? {
-      carries: 0,
-      targets: 0,
-      air: 0,
-      snaps: 0,
-    };
+    const cur = teamSeason.get(team) ?? emptyTotals();
     cur.carries += week.carries;
     cur.targets += week.targets;
     cur.air += week.air;
     cur.snaps += week.snaps;
+    cur.rbCarries += week.rbCarries;
     teamSeason.set(team, cur);
   }
 
   const acc = new Map<
     string,
-    PlayerWeekUsage & { _snaps: number; _air: number }
+    PlayerWeekUsage & { _snaps: number; _air: number; _snapKnown: boolean }
   >();
   for (const row of rows) {
     const key = `${row.team_abbr}:${row.gsis_id}`;
@@ -285,6 +293,7 @@ export function seasonToDate(rows: PlayerWeekUsage[]): PlayerWeekUsage[] {
         rushing_yards: row.rushing_yards ?? 0,
         rushing_tds: row.rushing_tds ?? 0,
         receiving_yards: row.receiving_yards ?? 0,
+        receiving_tds: row.receiving_tds ?? 0,
         pass_attempts: row.pass_attempts ?? 0,
         completions: row.completions ?? 0,
         passing_yards: row.passing_yards ?? 0,
@@ -293,6 +302,7 @@ export function seasonToDate(rows: PlayerWeekUsage[]): PlayerWeekUsage[] {
         fantasy_points_ppr: row.fantasy_points_ppr ?? 0,
         _snaps: row.offense_snaps ?? 0,
         _air: row.receiving_air_yards ?? 0,
+        _snapKnown: row.offense_snaps != null,
       });
       continue;
     }
@@ -303,6 +313,7 @@ export function seasonToDate(rows: PlayerWeekUsage[]): PlayerWeekUsage[] {
     cur.rushing_tds = (cur.rushing_tds ?? 0) + (row.rushing_tds ?? 0);
     cur.receiving_yards =
       (cur.receiving_yards ?? 0) + (row.receiving_yards ?? 0);
+    cur.receiving_tds = (cur.receiving_tds ?? 0) + (row.receiving_tds ?? 0);
     cur.pass_attempts = (cur.pass_attempts ?? 0) + (row.pass_attempts ?? 0);
     cur.completions = (cur.completions ?? 0) + (row.completions ?? 0);
     cur.passing_yards = (cur.passing_yards ?? 0) + (row.passing_yards ?? 0);
@@ -310,17 +321,27 @@ export function seasonToDate(rows: PlayerWeekUsage[]): PlayerWeekUsage[] {
     cur.interceptions = (cur.interceptions ?? 0) + (row.interceptions ?? 0);
     cur.fantasy_points_ppr =
       (cur.fantasy_points_ppr ?? 0) + (row.fantasy_points_ppr ?? 0);
-    cur._snaps += row.offense_snaps ?? 0;
+    if (row.offense_snaps != null) {
+      cur._snaps += row.offense_snaps;
+      cur._snapKnown = true;
+    }
     cur._air += row.receiving_air_yards ?? 0;
   }
 
   return [...acc.values()].map((row) => {
     const team = teamSeason.get(row.team_abbr);
+    const snaps = row._snapKnown ? row._snaps : null;
     const snapPct =
-      team && team.snaps > 0 ? round1((row._snaps / team.snaps) * 100) : null;
+      snaps != null && team && team.snaps > 0
+        ? round1((snaps / team.snaps) * 100)
+        : null;
     const rushShare =
       team && team.carries > 0
         ? round1(((row.carries ?? 0) / team.carries) * 100)
+        : null;
+    const rbRushShare =
+      row.position === "RB" && team && team.rbCarries > 0
+        ? round1(((row.carries ?? 0) / team.rbCarries) * 100)
         : null;
     const targetShare =
       team && team.targets > 0
@@ -330,10 +351,15 @@ export function seasonToDate(rows: PlayerWeekUsage[]): PlayerWeekUsage[] {
       team && team.air !== 0 ? round1((row._air / team.air) * 100) : null;
     return {
       ...row,
+      offense_snaps: snaps,
       snap_pct: snapPct,
       rush_share: rushShare,
+      rb_rush_share: rbRushShare,
       target_share: targetShare,
       air_yards_share: airShare,
+      team_carries: team?.carries ?? null,
+      team_targets: team?.targets ?? null,
+      team_air_yards: team?.air ?? null,
       fantasy_points_ppr: round1(row.fantasy_points_ppr),
     };
   });
@@ -369,6 +395,14 @@ export async function loadUsagePage(filters: UsageFilters) {
     filters.team
   );
   const weeks = [...new Set(all.map((r) => r.week))].sort((a, b) => a - b);
+  if (filters.week === "all") {
+    return {
+      weeks,
+      week: "all" as const,
+      weekGroups: groupUsageByTeam(seasonToDate(all).filter(played)),
+      stdGroups: [],
+    };
+  }
   const week =
     filters.week && weeks.includes(filters.week)
       ? filters.week

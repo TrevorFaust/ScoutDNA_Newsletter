@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { TeamArchiveFeed, type TeamArchiveEntry } from "@/components/TeamArchiveFeed";
+import { getViewer } from "@/lib/auth";
 import { createServerClient } from "@/lib/supabase";
 import { type IssueSummary } from "@/lib/issues";
 import { sectionHasContent, type TeamSectionContent } from "@/lib/sections";
@@ -20,10 +21,13 @@ type SectionRow = TeamSectionContent & {
     | null;
 };
 
-function toArchiveEntry(row: SectionRow): TeamArchiveEntry | null {
+function toArchiveEntry(row: SectionRow, includeDrafts: boolean): TeamArchiveEntry | null {
   const raw = row.newsletter_issues;
   const issue = Array.isArray(raw) ? raw[0] : raw;
-  if (!issue || !["published", "in_review", "approved"].includes(issue.status)) {
+  const allowed = includeDrafts
+    ? ["published", "in_review", "approved"]
+    : ["published"];
+  if (!issue || !allowed.includes(issue.status)) {
     return null;
   }
   if (!sectionHasContent(row)) return null;
@@ -34,6 +38,8 @@ function toArchiveEntry(row: SectionRow): TeamArchiveEntry | null {
 
 export default async function TeamArchivePage({ params }: Props) {
   const { slug } = await params;
+  const viewer = await getViewer();
+  const includeDrafts = Boolean(viewer?.isAdmin);
   const team = (teamsData as TeamMeta[]).find((t) => t.slug === slug);
   const supabase = createServerClient();
 
@@ -60,7 +66,7 @@ export default async function TeamArchivePage({ params }: Props) {
   const playerEntries = serializePlayerLookup(playerLookup);
 
   const entries = (sections ?? [])
-    .map((s) => toArchiveEntry(s as SectionRow))
+    .map((s) => toArchiveEntry(s as SectionRow, includeDrafts))
     .filter((e): e is TeamArchiveEntry => e !== null)
     .sort((a, b) => b.issue.issue_date.localeCompare(a.issue.issue_date));
 
@@ -82,9 +88,8 @@ export default async function TeamArchivePage({ params }: Props) {
         )}
         <h1>{team?.name ?? slug}</h1>
         <p className="page-lead">
-          Reported news for this franchise, newest first. Daily editions and Monday
-          week-in-review recaps appear together; quiet days with nothing to report
-          are omitted.
+          Reported news for this franchise, newest first. Weekly recaps appear
+          here; quiet weeks with nothing to report are omitted.
         </p>
       </header>
 

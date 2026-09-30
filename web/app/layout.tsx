@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Newsreader, Source_Sans_3 } from "next/font/google";
 import Link from "next/link";
 import { SiteNav } from "@/components/SiteNav";
+import { getViewer } from "@/lib/auth";
 import "./globals.css";
 
 const newsreader = Newsreader({
@@ -18,7 +19,7 @@ const sourceSans = Source_Sans_3({
 
 export const metadata: Metadata = {
   title: "ScoutDNA: All 32",
-  description: "Fantasy-focused daily NFL news for all 32 teams",
+  description: "Fantasy-focused weekly NFL recaps for all 32 teams",
   icons: {
     icon: [{ url: "/tab-icon.png", type: "image/png" }],
     apple: "/tab-icon.png",
@@ -26,14 +27,16 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0c1017",
+  themeColor: "#e6e3db",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const viewer = await getViewer();
+
   return (
     <html lang="en" className={`${newsreader.variable} ${sourceSans.variable}`}>
       <body>
@@ -51,7 +54,7 @@ export default function RootLayout({
                 <span className="brand-colon">:</span> All 32
               </span>
             </Link>
-            <SiteNav />
+            <SiteNav viewer={viewer} />
           </div>
         </header>
         {children}

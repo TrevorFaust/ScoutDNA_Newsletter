@@ -1,4 +1,5 @@
 import { IssueView } from "@/components/IssueView";
+import { getViewer } from "@/lib/auth";
 import { nflWeekNumber } from "@/lib/dates";
 import { createServerClient } from "@/lib/supabase";
 import { fetchAdjacentIssues } from "@/lib/issues";
@@ -18,6 +19,7 @@ export const dynamic = "force-dynamic";
 export default async function IssuePage({ params, searchParams }: Props) {
   const { date } = await params;
   const { team: teamParam } = await searchParams;
+  const viewer = await getViewer();
   const supabase = createServerClient();
 
   const { data: issue } = await supabase
@@ -26,7 +28,7 @@ export default async function IssuePage({ params, searchParams }: Props) {
     .eq("slug", date)
     .maybeSingle();
 
-  if (!issue) {
+  if (!issue || (issue.status !== "published" && !viewer?.isAdmin)) {
     return (
       <main>
         <h1>Issue not found</h1>
@@ -41,14 +43,15 @@ export default async function IssuePage({ params, searchParams }: Props) {
     .eq("issue_id", issue.id)
     .order("sort_order");
 
-  const favorite = teamParam ?? undefined;
+  const favorite = teamParam ?? viewer?.favoriteTeamSlug ?? undefined;
 
   const playerLookup = await fetchPlayerPositionLookup(supabase);
   const playerEntries = serializePlayerLookup(playerLookup);
 
   const adjacent = await fetchAdjacentIssues(
     issue.issue_date,
-    issue.issue_type as "daily" | "weekly"
+    issue.issue_type as "daily" | "weekly",
+    { includeDrafts: Boolean(viewer?.isAdmin) }
   );
 
   const issueDateIso = String(issue.issue_date).slice(0, 10);
@@ -95,6 +98,7 @@ export default async function IssuePage({ params, searchParams }: Props) {
       adjacentNext={adjacent.next}
       usageByTeam={usageByTeam}
       usageWeekLabel={usageWeekLabel}
+      isAdmin={Boolean(viewer?.isAdmin)}
     />
   );
 }

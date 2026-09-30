@@ -8,9 +8,16 @@ export function toSuperscript(n: number): string {
     .join("");
 }
 
-/** [1], [2] or (1) from model → ¹ ² */
+/**
+ * [1], [2] from model → ¹ ².
+ * Parenthetical (1) only after sentence-ending punctuation so stats like
+ * "targets (6)" / "yards (83)" are never turned into footnote superscripts.
+ */
 export function normalizeInlineCitations(text: string): string {
   return text
     .replace(/\[(\d{1,2})\]/g, (_, num) => toSuperscript(parseInt(num, 10)))
-    .replace(/\((\d{1,2})\)(?=\s|$|\.|,)/g, (_, num) => toSuperscript(parseInt(num, 10)));
+    .replace(
+      /(?<=[.!?…'"”])\s*\((\d{1,2})\)(?=\s|$|[.,;:])/g,
+      (_, num) => toSuperscript(parseInt(num, 10))
+    );
 }

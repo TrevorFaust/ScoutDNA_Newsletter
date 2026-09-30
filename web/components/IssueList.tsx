@@ -6,9 +6,16 @@ type Props = {
   emptyMessage: string;
   teamSlug?: string;
   showDrafts?: boolean;
+  isAdmin?: boolean;
 };
 
-export function IssueList({ issues, emptyMessage, teamSlug, showDrafts = true }: Props) {
+export function IssueList({
+  issues,
+  emptyMessage,
+  teamSlug,
+  showDrafts = true,
+  isAdmin = false,
+}: Props) {
   const visible = showDrafts
     ? issues
     : issues.filter((i) => i.status === "published");
@@ -20,7 +27,12 @@ export function IssueList({ issues, emptyMessage, teamSlug, showDrafts = true }:
   return (
     <div className="issue-grid">
       {visible.map((issue) => (
-        <IssueCard key={`${issue.slug}-${issue.issue_type}`} issue={issue} teamSlug={teamSlug} />
+        <IssueCard
+          key={`${issue.slug}-${issue.issue_type}`}
+          issue={issue}
+          teamSlug={teamSlug}
+          isAdmin={isAdmin}
+        />
       ))}
     </div>
   );

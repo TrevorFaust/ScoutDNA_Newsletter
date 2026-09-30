@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { createServerClient } from "@/lib/supabase";
 
 export async function POST(req: NextRequest) {
+  const gate = await requireAdminApi();
+  if (!gate.ok) return gate.response;
+
   const body = await req.json().catch(() => null);
   const proposalId = body?.proposalId as string | undefined;
   const reason = (body?.reason as string | undefined)?.trim() || null;

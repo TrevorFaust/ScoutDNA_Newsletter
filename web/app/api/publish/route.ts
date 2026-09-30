@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireAdminApi } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
+  const gate = await requireAdminApi();
+  if (!gate.ok) return gate.response;
+
   const form = await req.formData();
   const issueId = form.get("issueId") as string;
   const slug = form.get("slug") as string;

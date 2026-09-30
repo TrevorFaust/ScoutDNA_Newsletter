@@ -4,6 +4,32 @@ export type PosTab = "QB" | "RB" | "WR" | "TE";
 
 export const POS_TABS: PosTab[] = ["QB", "RB", "WR", "TE"];
 
+export type Scoring = "ppr" | "half" | "std";
+
+export const SCORING_OPTIONS: { value: Scoring; label: string; column: string }[] = [
+  { value: "ppr", label: "PPR", column: "PPR" },
+  { value: "half", label: "Half PPR", column: "½ PPR" },
+  { value: "std", label: "Standard", column: "Std" },
+];
+
+export function parseScoring(value: string | undefined): Scoring {
+  return SCORING_OPTIONS.some((o) => o.value === value) ? (value as Scoring) : "ppr";
+}
+
+export function scoringColumn(scoring: Scoring) {
+  return SCORING_OPTIONS.find((o) => o.value === scoring)?.column ?? "PPR";
+}
+
+/** nflverse PPR already counts 1 point per catch, so the other formats subtract receptions. */
+export function fantasyPoints(row: PlayerWeekUsage, scoring: Scoring): number | null {
+  const ppr = row.fantasy_points_ppr;
+  if (ppr == null || Number.isNaN(Number(ppr))) return null;
+  const rec = Number(row.receptions) || 0;
+  if (scoring === "half") return Number(ppr) - rec * 0.5;
+  if (scoring === "std") return Number(ppr) - rec;
+  return Number(ppr);
+}
+
 export function fmt(n: number | null | undefined, digits = 1) {
   if (n == null || Number.isNaN(Number(n))) return "—";
   return Number(n).toFixed(digits);

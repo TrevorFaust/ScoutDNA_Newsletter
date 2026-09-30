@@ -1,5 +1,8 @@
+import { formatIssueDate, weekTabLabel } from "@/lib/dates";
+import { displayIssueTitle, issueDeck, issueHook } from "@/lib/issueTitle";
 import { createServerClient } from "@/lib/supabase";
-import { formatIssueDate } from "@/lib/dates";
+import { getTeams } from "@/lib/teams";
+import type { WeeklyReelItem } from "@/lib/weeklyReel";
 
 export { cleanCopy } from "@/lib/cleanCopy";
 
@@ -12,7 +15,10 @@ export type IssueSummary = {
   published_at: string | null;
 };
 
-export async function fetchIssues(issueType?: "daily" | "weekly") {
+export async function fetchIssues(
+  issueType?: "daily" | "weekly",
+  opts?: { includeDrafts?: boolean }
+) {
   const supabase = createServerClient();
   let query = supabase
     .from("newsletter_issues")
@@ -21,6 +27,9 @@ export async function fetchIssues(issueType?: "daily" | "weekly") {
 
   if (issueType) {
     query = query.eq("issue_type", issueType);
+  }
+  if (!opts?.includeDrafts) {
+    query = query.eq("status", "published");
   }
 
   const { data, error } = await query;
@@ -71,14 +80,19 @@ export type AdjacentIssue = {
 
 export async function fetchAdjacentIssues(
   issueDate: string,
-  issueType: "daily" | "weekly"
+  issueType: "daily" | "weekly",
+  opts?: { includeDrafts?: boolean }
 ): Promise<{ prev: AdjacentIssue | null; next: AdjacentIssue | null }> {
   const supabase = createServerClient();
-  const { data } = await supabase
+  let query = supabase
     .from("newsletter_issues")
     .select("issue_date, slug, title")
     .eq("issue_type", issueType)
     .order("issue_date", { ascending: true });
+  if (!opts?.includeDrafts) {
+    query = query.eq("status", "published");
+  }
+  const { data } = await query;
 
   const issues = (data ?? []) as AdjacentIssue[];
   const idx = issues.findIndex((i) => i.issue_date === issueDate);
@@ -90,5 +104,105 @@ export async function fetchAdjacentIssues(
   return {
     prev: idx > 0 ? issues[idx - 1] : null,
     next: idx < issues.length - 1 ? issues[idx + 1] : null,
+  };
+}
+
+export type { WeeklyReelItem } from "@/lib/weeklyReel";
+
+type WeeklyIssueRow = IssueSummary & {
+  id: string;
+  league_section: string | null;
+};
+
+function stripPreview(text: string | null | undefined, max = 320): string {
+  if (!text) return "";
+  const plain = text
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/[#>*_`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (plain.length <= max) return plain;
+  const cut = plain.slice(0, max);
+  const sp = cut.lastIndexOf(" ");
+  return `${cut.slice(0, sp > 80 ? sp : max).trim()}…`;
+}
+
+export async function fetchWeeklyReel(opts: {
+  teamSlug?: string;
+  includeDrafts?: boolean;
+}): Promise<{
+  items: WeeklyReelItem[];
+  previewLabel: string;
+  error: { message: string } | null;
+}> {
+  const supabase = createServerClient();
+  let query = supabase
+    .from("newsletter_issues")
+    .select("id, issue_date, slug, title, status, issue_type, published_at, league_section")
+    .eq("issue_type", "weekly")
+    .order("issue_date", { ascending: false });
+  if (!opts.includeDrafts) {
+    query = query.eq("status", "published");
+  }
+  const { data, error } = await query;
+  const issues = (data ?? []) as WeeklyIssueRow[];
+
+  const team = opts.teamSlug
+    ? getTeams().find((t) => t.slug === opts.teamSlug)
+    : undefined;
+  const previewByIssue = new Map<string, string>();
+
+  if (team && issues.length > 0) {
+    const { data: teamRow } = await supabase
+      .from("newsletter_teams")
+      .select("id")
+      .eq("slug", team.slug)
+      .maybeSingle();
+    if (teamRow?.id) {
+      const { data: sections } = await supabase
+        .from("newsletter_sections")
+        .select("issue_id, intro_paragraphs")
+        .eq("team_id", teamRow.id)
+        .in(
+          "issue_id",
+          issues.map((issue) => issue.id)
+        );
+      for (const row of sections ?? []) {
+        const preview = stripPreview(row.intro_paragraphs as string | null);
+        if (preview) previewByIssue.set(row.issue_id as string, preview);
+      }
+    }
+  }
+
+  const items = issues.map((issue) => {
+    const hook = issueHook(issue);
+    const deck = issueDeck(issue);
+    const preview =
+      previewByIssue.get(issue.id) ||
+      stripPreview(issue.league_section) ||
+      deck ||
+      hook ||
+      "";
+    return {
+      slug: issue.slug,
+      issueDate: issue.issue_date,
+      href: opts.teamSlug
+        ? `/issue/${issue.slug}?team=${opts.teamSlug}`
+        : `/issue/${issue.slug}`,
+      label: displayIssueTitle(issue),
+      tabLabel: weekTabLabel(issue.issue_date),
+      dateLabel: formatIssueDate(issue.issue_date),
+      hook,
+      deck,
+      preview,
+      status: issue.status,
+    };
+  });
+
+  return {
+    items,
+    previewLabel: team ? team.name : "League letter",
+    error: error ? { message: error.message } : null,
   };
 }
