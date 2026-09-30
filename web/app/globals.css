@@ -1949,32 +1949,127 @@ button.team-link:disabled {
   }
 }
 
-.toc {
+.team-jump {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 1rem 1.25rem;
+  border-radius: var(--radius);
+  padding: 0.75rem 0.85rem 0.8rem;
   margin: 1.5rem 0;
 }
 
-.toc h2 {
-  margin-top: 0;
-  font-size: 1rem;
+.team-jump-title {
+  margin: 0 0 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  font-family: var(--font-body);
+  text-align: center;
+}
+
+.team-jump-conferences {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+}
+
+.team-jump-mark {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.45rem;
+}
+
+.team-jump-mark::before,
+.team-jump-mark::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+.team-jump-mark .conference-mark {
+  height: 1.6rem;
+}
+
+.team-jump-divisions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+}
+
+.team-jump-division {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.35rem 0.3rem 0.3rem;
+  background: color-mix(in srgb, var(--paper-elevated) 55%, transparent);
+}
+
+.team-jump-division-name {
+  margin: 0 0 0.15rem 0.35rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  font-family: var(--font-body);
+}
+
+.team-jump-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.team-jump-link {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.16rem 0.35rem;
+  border-radius: 4px;
+  text-decoration: none;
+  color: var(--ink);
+  font-size: 0.8rem;
+  line-height: 1.3;
+  transition: background 0.15s;
+}
+
+.team-jump-link:hover,
+.team-jump-link:focus-visible {
+  background: color-mix(in srgb, var(--forest) 14%, var(--surface));
+  color: var(--ink);
+}
+
+.team-jump-link .team-logo {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.team-jump-abbrev {
+  min-width: 1.85rem;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   color: var(--muted);
 }
 
-.toc ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem 0.75rem;
+.team-jump-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.toc li a {
-  font-size: 0.9rem;
-  text-decoration: none;
+@media (max-width: 640px) {
+  .team-jump-conferences {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 380px) {
+  .team-jump-abbrev {
+    display: none;
+  }
 }
 
 .team-section {

@@ -6,6 +6,7 @@ import { IssueAdjacentNav } from "@/components/IssueAdjacentNav";
 import { MarkdownBlock } from "@/components/MarkdownBlock";
 import { PublishIssueForm } from "@/components/PublishIssueForm";
 import { ReferencesDropdown } from "@/components/ReferencesDropdown";
+import { TeamJumpNav } from "@/components/TeamJumpNav";
 import { TeamSectionBody } from "@/components/TeamSectionBody";
 import { cleanCopy } from "@/lib/cleanCopy";
 import { recapLabel } from "@/lib/dates";
@@ -168,23 +169,7 @@ export function IssueView({
         </div>
       )}
 
-      <nav className="toc" aria-label="Teams by division">
-        <h2>Jump to team</h2>
-        {Object.entries(divisions).map(([divName, teams]) => (
-          <div key={divName} style={{ marginBottom: "0.75rem" }}>
-            <div style={{ fontSize: "0.75rem", color: "var(--muted)", marginBottom: "0.25rem" }}>
-              {divName}
-            </div>
-            <ul>
-              {teams.map((t) => (
-                <li key={t.slug}>
-                  <a href={`#${t.slug}`}>{t.name}</a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </nav>
+      <TeamJumpNav />
 
       {Object.entries(divisions).map(([divName, teams]) => (
         <div key={divName}>
