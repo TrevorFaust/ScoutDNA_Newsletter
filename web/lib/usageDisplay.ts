@@ -1,8 +1,8 @@
 import type { PlayerWeekUsage } from "@/lib/playerUsage";
 
-export type PosTab = "QB" | "RB" | "WR" | "TE";
+export type PosTab = "QB" | "RB" | "WR/TE";
 
-export const POS_TABS: PosTab[] = ["QB", "RB", "WR", "TE"];
+export const POS_TABS: PosTab[] = ["QB", "RB", "WR/TE"];
 
 export type Scoring = "ppr" | "half" | "std";
 
@@ -91,14 +91,19 @@ function hasOffensiveInvolvement(row: PlayerWeekUsage) {
   );
 }
 
-export function rowsForTab(rows: PlayerWeekUsage[], tab: PosTab): PlayerWeekUsage[] {
-  const filtered = rows.filter((r) => {
+function rowsAtPositions(rows: PlayerWeekUsage[], positions: string[]) {
+  return rows.filter((r) => {
     if (!hasOffensiveInvolvement(r)) return false;
-    const pos = (r.position || "").toUpperCase();
-    if (tab === "RB") return pos === "RB" || pos === "FB";
-    return pos === tab;
+    return positions.includes((r.position || "").toUpperCase());
   });
-  const sorted = sortUsageRows(filtered, tab);
-  if (tab === "WR") return wrSnapSlice(sorted);
-  return sorted;
+}
+
+export function rowsForTab(rows: PlayerWeekUsage[], tab: PosTab): PlayerWeekUsage[] {
+  if (tab === "WR/TE") {
+    const wrs = wrSnapSlice(sortUsageRows(rowsAtPositions(rows, ["WR"]), tab));
+    const tes = rowsAtPositions(rows, ["TE"]);
+    return sortUsageRows([...wrs, ...tes], tab);
+  }
+  const positions = tab === "RB" ? ["RB", "FB"] : [tab];
+  return sortUsageRows(rowsAtPositions(rows, positions), tab);
 }

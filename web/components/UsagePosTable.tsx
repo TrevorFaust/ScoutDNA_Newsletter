@@ -13,10 +13,10 @@ type Props = {
   rows: PlayerWeekUsage[];
   tab: PosTab;
   scoring?: Scoring;
-  showPos?: boolean;
 };
 
-export function UsagePosTable({ rows, tab, scoring = "ppr", showPos = false }: Props) {
+export function UsagePosTable({ rows, tab, scoring = "ppr" }: Props) {
+  const showPos = tab === "WR/TE";
   return (
     <div className="usage-table-wrap">
       <table className="usage-table">
@@ -46,7 +46,7 @@ export function UsagePosTable({ rows, tab, scoring = "ppr", showPos = false }: P
                 <th>Rec yds</th>
               </>
             ) : null}
-            {tab === "WR" || tab === "TE" ? (
+            {tab === "WR/TE" ? (
               <>
                 <th>Targets</th>
                 <th>Rec</th>
@@ -88,7 +88,7 @@ export function UsagePosTable({ rows, tab, scoring = "ppr", showPos = false }: P
                   <td>{countOrZero(r.receiving_yards)}</td>
                 </>
               ) : null}
-              {tab === "WR" || tab === "TE" ? (
+              {tab === "WR/TE" ? (
                 <>
                   <td>{countOrDash(r.targets)}</td>
                   <td>{countOrDash(r.receptions)}</td>
