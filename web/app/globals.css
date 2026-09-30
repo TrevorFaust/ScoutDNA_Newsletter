@@ -3209,6 +3209,72 @@ button.metric-chip.is-pinned {
   border-bottom: none;
 }
 
+.usage-team-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.85rem;
+  min-width: 0;
+}
+
+.matchup-tag,
+.matchup-strip-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.matchup-tag .team-logo,
+.matchup-strip-item .team-logo {
+  width: 1rem;
+  height: 1rem;
+}
+
+.matchup-venue {
+  font-style: italic;
+}
+
+.matchup-opponent {
+  color: var(--ink);
+}
+
+.matchup-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.matchup-week {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.matchup-opponent-abbrev {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.matchup-result {
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.matchup-result-w {
+  color: var(--forest);
+}
+
+.matchup-result-l {
+  color: #a4453a;
+}
+
 .team-usage-panel-title {
   margin: 0;
   font-size: 0.95rem;

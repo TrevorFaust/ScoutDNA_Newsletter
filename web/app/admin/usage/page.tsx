@@ -7,6 +7,7 @@ import {
   USAGE_TYPES,
   type UsageSeasonType,
 } from "@/lib/playerUsage";
+import { fetchTeamGames, gamesInWeeks, type TeamGamesByTeam } from "@/lib/teamGames";
 import { getTeams } from "@/lib/teams";
 import { parseScoring, SCORING_OPTIONS } from "@/lib/usageDisplay";
 
@@ -74,6 +75,9 @@ export default async function UsageAdminPage({
   const team = params.team?.toUpperCase() || null;
   const scoring = parseScoring(params.scoring);
   const teams = getTeams();
+  const gamesPromise = fetchTeamGames(season, seasonType).catch(
+    (): TeamGamesByTeam => ({})
+  );
 
   let page: Awaited<ReturnType<typeof loadUsagePage>> | null = null;
   if (!loadError) {
@@ -92,6 +96,9 @@ export default async function UsageAdminPage({
   const seasons = meta?.seasons?.length ? meta.seasons : [season];
   const weeks = page?.weeks ?? [];
   const week = page?.week ?? weekParam;
+  const shownWeeks =
+    page?.week === "all" || team ? weeks : page?.week != null ? [page.week] : [];
+  const games = gamesInWeeks(await gamesPromise, shownWeeks);
 
   return (
     <main className="camp-admin usage-admin">
@@ -150,6 +157,8 @@ export default async function UsageAdminPage({
 
       {page && (page.weekGroups.length > 0 || page.stdGroups.length > 0) && (
         <UsageBoard
+          week={page.week ?? "all"}
+          games={games}
           weekHeading={`${weekHeading(page.week ?? 0, seasonType, weeks)} · ${season} ${seasonType}`}
           weekNote={
             page.week === "all"

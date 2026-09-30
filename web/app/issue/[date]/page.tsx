@@ -8,6 +8,7 @@ import {
   serializePlayerLookup,
 } from "@/lib/playerRegistry";
 import { fetchUsageForWeek, usageByTeamAbbr } from "@/lib/playerUsage";
+import { fetchTeamGames, type TeamGame } from "@/lib/teamGames";
 
 type Props = {
   params: Promise<{ date: string }>;
@@ -57,6 +58,9 @@ export default async function IssuePage({ params, searchParams }: Props) {
   const issueDateIso = String(issue.issue_date).slice(0, 10);
   const weekNum =
     issue.issue_type === "weekly" ? nflWeekNumber(issueDateIso) : null;
+  const gamesPromise = weekNum
+    ? fetchTeamGames(2026, "REG").catch(() => null)
+    : null;
   let usageByTeam: ReturnType<typeof usageByTeamAbbr> | undefined;
   let usageWeekLabel: string | undefined;
   if (weekNum) {
@@ -70,6 +74,14 @@ export default async function IssuePage({ params, searchParams }: Props) {
       usageWeekLabel = `Week ${weekNum}`;
     } catch {
       usageByTeam = undefined;
+    }
+  }
+  const games = await gamesPromise;
+  const usageMatchups: Record<string, TeamGame> = {};
+  if (games && weekNum) {
+    for (const [team, list] of Object.entries(games)) {
+      const game = list.find((g) => g.week === weekNum);
+      if (game) usageMatchups[team] = game;
     }
   }
 
@@ -98,6 +110,7 @@ export default async function IssuePage({ params, searchParams }: Props) {
       adjacentNext={adjacent.next}
       usageByTeam={usageByTeam}
       usageWeekLabel={usageWeekLabel}
+      usageMatchups={usageMatchups}
       isAdmin={Boolean(viewer?.isAdmin)}
     />
   );

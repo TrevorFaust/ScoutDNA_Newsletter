@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState } from "react";
+import { MatchupStrip, MatchupTag } from "@/components/MatchupTag";
 import { TeamLogo } from "@/components/TeamLogo";
 import { UsagePosTable } from "@/components/UsagePosTable";
 import type { PlayerWeekUsage } from "@/lib/playerUsage";
+import type { TeamGamesByTeam } from "@/lib/teamGames";
 import { getTeams } from "@/lib/teams";
 import {
   POS_TABS,
@@ -16,13 +18,17 @@ import {
 type Group = { team: string; items: PlayerWeekUsage[] };
 
 type Props = {
+  week: number | "all";
   weekHeading: string;
   weekNote?: string;
   weekGroups: Group[];
   stdHeading?: string;
   stdGroups?: Group[];
+  games?: TeamGamesByTeam;
   scoring: Scoring;
 };
+
+const NO_GAMES: TeamGamesByTeam = {};
 
 const TEAM_BY_ABBREV = new Map(getTeams().map((t) => [t.abbrev.toUpperCase(), t]));
 
@@ -165,7 +171,20 @@ function TeamTitle({ team }: { team: string }) {
   );
 }
 
-function TeamUsageBox({ team, items, scoring }: Group & { scoring: Scoring }) {
+function TeamMatchups({ team, week, games }: { team: string; week: number | "all"; games: TeamGamesByTeam }) {
+  const list = games[siteAbbrev(team)] ?? [];
+  if (week === "all") return list.length ? <MatchupStrip games={list} /> : null;
+  const game = list.find((g) => g.week === week);
+  return game ? <MatchupTag game={game} /> : null;
+}
+
+type BoxProps = Group & {
+  scoring: Scoring;
+  week: number | "all";
+  games: TeamGamesByTeam;
+};
+
+function TeamUsageBox({ team, items, scoring, week, games }: BoxProps) {
   const available = useMemo(
     () => POS_TABS.filter((tab) => rowsForTab(items, tab).length > 0),
     [items]
@@ -180,7 +199,10 @@ function TeamUsageBox({ team, items, scoring }: Group & { scoring: Scoring }) {
   return (
     <section className="camp-team-group">
       <div className="team-usage-panel-header">
-        <TeamTitle team={team} />
+        <div className="usage-team-heading">
+          <TeamTitle team={team} />
+          <TeamMatchups team={team} week={week} games={games} />
+        </div>
         <div className="team-usage-tabs" role="tablist" aria-label={`${team} position usage`}>
           {available.map((t) => (
             <button
@@ -203,7 +225,17 @@ function TeamUsageBox({ team, items, scoring }: Group & { scoring: Scoring }) {
   );
 }
 
-function TeamGroups({ groups, scoring }: { groups: Group[]; scoring: Scoring }) {
+function TeamGroups({
+  groups,
+  scoring,
+  week,
+  games,
+}: {
+  groups: Group[];
+  scoring: Scoring;
+  week: number | "all";
+  games: TeamGamesByTeam;
+}) {
   const visible = groups
     .filter((g) => POS_TABS.some((tab) => rowsForTab(g.items, tab).length > 0))
     .toSorted((a, b) => siteAbbrev(a.team).localeCompare(siteAbbrev(b.team)));
@@ -215,18 +247,27 @@ function TeamGroups({ groups, scoring }: { groups: Group[]; scoring: Scoring }) 
   return (
     <div className="camp-team-groups">
       {visible.map((g) => (
-        <TeamUsageBox key={g.team} team={g.team} items={g.items} scoring={scoring} />
+        <TeamUsageBox
+          key={g.team}
+          team={g.team}
+          items={g.items}
+          scoring={scoring}
+          week={week}
+          games={games}
+        />
       ))}
     </div>
   );
 }
 
 export function UsageBoard({
+  week,
   weekHeading,
   weekNote,
   weekGroups,
   stdHeading,
   stdGroups = [],
+  games = NO_GAMES,
   scoring,
 }: Props) {
   return (
@@ -236,7 +277,7 @@ export function UsageBoard({
           <h2 className="usage-board-heading">{weekHeading}</h2>
           {weekNote ? <p className="camp-admin-muted usage-board-note">{weekNote}</p> : null}
           <MetricKey scoring={scoring} />
-          <TeamGroups groups={weekGroups} scoring={scoring} />
+          <TeamGroups groups={weekGroups} scoring={scoring} week={week} games={games} />
         </section>
       ) : null}
 
@@ -248,7 +289,7 @@ export function UsageBoard({
             true season shares (player total ÷ team season total), not averages
             of weekly percentages.
           </p>
-          <TeamGroups groups={stdGroups} scoring={scoring} />
+          <TeamGroups groups={stdGroups} scoring={scoring} week="all" games={games} />
         </section>
       ) : null}
     </>
