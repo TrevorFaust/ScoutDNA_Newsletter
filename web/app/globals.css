@@ -3282,8 +3282,3 @@ button.metric-chip.is-pinned {
   opacity: 0.4;
   cursor: not-allowed;
 }
-
-.team-usage-panel .usage-table th:nth-child(2),
-.team-usage-panel .usage-table td:nth-child(2) {
-  text-align: right;
-}

@@ -60,6 +60,11 @@ function metricsFor(scoring: Scoring) {
       text: "Passing yards, touchdowns, and interceptions for the week or the season total.",
     },
     {
+      id: "skill-tds",
+      label: "Rush TD · Rec TD",
+      text: "Rushing and receiving touchdowns for the week. All weeks adds them up.",
+    },
+    {
       id: "rush-share",
       label: "Rush%",
       text: "A running back's share of the team's carries.",

@@ -41,16 +41,20 @@ export function UsagePosTable({ rows, tab, scoring = "ppr" }: Props) {
                 <th>Carries</th>
                 <th>Rush%</th>
                 <th>Rush yds</th>
+                <th>Rush TD</th>
                 <th>Targets</th>
                 <th>Rec</th>
                 <th>Rec yds</th>
+                <th>Rec TD</th>
               </>
             ) : null}
             {tab === "WR/TE" ? (
               <>
                 <th>Targets</th>
                 <th>Rec</th>
-                <th>Yards</th>
+                <th>Rec yds</th>
+                <th>Rec TD</th>
+                <th>Rush TD</th>
                 <th>Target%</th>
                 <th>Air%</th>
               </>
@@ -83,9 +87,11 @@ export function UsagePosTable({ rows, tab, scoring = "ppr" }: Props) {
                   <td>{countOrDash(r.carries)}</td>
                   <td>{fmt(r.rb_rush_share ?? r.rush_share, 0)}</td>
                   <td>{countOrZero(r.rushing_yards)}</td>
+                  <td>{countOrZero(r.rushing_tds)}</td>
                   <td>{countOrDash(r.targets)}</td>
                   <td>{countOrDash(r.receptions)}</td>
                   <td>{countOrZero(r.receiving_yards)}</td>
+                  <td>{countOrZero(r.receiving_tds)}</td>
                 </>
               ) : null}
               {tab === "WR/TE" ? (
@@ -93,6 +99,8 @@ export function UsagePosTable({ rows, tab, scoring = "ppr" }: Props) {
                   <td>{countOrDash(r.targets)}</td>
                   <td>{countOrDash(r.receptions)}</td>
                   <td>{countOrDash(r.receiving_yards)}</td>
+                  <td>{countOrZero(r.receiving_tds)}</td>
+                  <td>{countOrZero(r.rushing_tds)}</td>
                   <td>{fmt(r.target_share, 0)}</td>
                   <td>{fmt(r.air_yards_share, 0)}</td>
                 </>
