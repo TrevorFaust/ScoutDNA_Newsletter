@@ -10,7 +10,7 @@ You get what moved, who said it, and what it does to your roster, with a citatio
 
 | Layer | What you get |
 |-------|----------------|
-| **Edition header** | A headline, a one-line deck, and an "In this edition" list of the week's biggest storylines, stored per issue (`hook`, `deck`, `storylines`) |
+| **Edition teaser** | A headline and one-line deck stored per issue (`hook`, `deck`) for the home page and archive cards; the issue itself opens straight into the league lens |
 | **League lens** | Weekly: scores and records, the top PPR lines, injuries that move the season, and the next week's slate, built from a league week board. National stories ride along when they have traction beyond one fan base |
 | **Team sections (×32)** | Intro, then **Activity** (new facts, earned quotes, rumor beats), then **Fantasy lens** (QB / RB / WR / TE / team DEF so-what only) |
 | **Footnotes** | Superscript citations back to Reddit posts, RSS, transcripts. No orphan claims. |
