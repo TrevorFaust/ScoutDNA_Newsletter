@@ -127,6 +127,14 @@ def _repair_weekly_leaks(
     raise RuntimeError(exhausted_message("weekly compose", errors))
 
 
+def _header_fields(league: dict) -> dict:
+    return {
+        key: league[key]
+        for key in ("hook", "deck", "storylines")
+        if league.get(key)
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Compose Tuesday weekly recap")
     parser.add_argument(
@@ -143,6 +151,11 @@ def main() -> None:
         "--team",
         type=str,
         help="Recompose only these team slug(s), comma-separated (e.g. dallas-cowboys).",
+    )
+    parser.add_argument(
+        "--league",
+        action="store_true",
+        help="Recompose only the league-wide opener and edition header (hook, deck, storylines).",
     )
     args = parser.parse_args()
 
@@ -194,6 +207,24 @@ def main() -> None:
             raise RuntimeError("ANTHROPIC_API_KEY required for compose")
         client = anthropic.Anthropic(api_key=api_key)
 
+        league_header: dict = {}
+        if args.league:
+            league = compose_league_section_weekly(
+                client,
+                build_league_weekly_input(issue_date, slug_to_id),
+                issue_date,
+                prior_context=prior_context,
+            )
+            sb.table(ISSUES).update(
+                {
+                    "league_section": league["body"],
+                    "league_footnotes": league.get("footnotes") or [],
+                    **_header_fields(league),
+                }
+            ).eq("id", issue_id).execute()
+            print(f"[weekly] league opener updated for {issue_date}", flush=True)
+            return
+
         if compose_slugs:
             sections = []
             sort = 0
@@ -226,6 +257,7 @@ def main() -> None:
             )
             league_text = league["body"]
             league_footnotes = league.get("footnotes") or []
+            league_header = _header_fields(league)
 
         league_text, league_footnotes = _repair_weekly_leaks(
             client,
@@ -269,6 +301,7 @@ def main() -> None:
         if league_text is not None:
             issue_update["league_section"] = league_text
             issue_update["league_footnotes"] = league_footnotes or []
+            issue_update.update(league_header)
         sb.table(ISSUES).update(issue_update).eq("id", issue_id).execute()
         save_sections(issue_id, sb_sections)
 

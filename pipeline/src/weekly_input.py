@@ -567,7 +567,17 @@ def build_league_weekly_input(
             }
         )
 
-    return {
+    from .compose_context import league_week_board
+
+    out: dict[str, Any] = {
         "week_label": recap_label(weekly_issue_date),
         "topic_clusters": topic_clusters,
     }
+    try:
+        board = league_week_board(weekly_issue_date)
+    except Exception as exc:
+        print(f"[weekly] league week board skipped: {exc}", flush=True)
+        board = None
+    if board:
+        out["week_board"] = board
+    return out

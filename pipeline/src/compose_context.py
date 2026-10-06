@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from collections import defaultdict
+from datetime import date
 from typing import Any
 
 from .db import get_client
@@ -323,6 +324,152 @@ def _fetch_skill_position_battles(team_abbr: str) -> list[dict]:
         for r in rows
         if r.get("slot") and r.get("status")
     ]
+
+
+INACTIVE_ROSTER_STATUS = frozenset({"RES", "CUT", "RET", "SUS", "EXE", "UFA", "NON"})
+
+
+def _live_player_status(team_abbr: str, names: list[str]) -> tuple[int | None, dict[str, str]]:
+    """Why a curated depth/battle name is not in the live mix this season.
+
+    Preseason curation goes stale once games start: a traded QB, a rookie on IR, or a
+    first-rounder who has not taken a snap since Week 1 cannot be "contesting" a slot.
+    Returns (latest REG week, {norm_name: reason}) for names that are out of the mix.
+    """
+    if not names:
+        return None, {}
+    abbr = _canon_team(team_abbr)
+    aliases = set(USAGE_TEAM_ALIASES.get(abbr, (abbr,))) | {abbr}
+    sb = get_client()
+    try:
+        usage = (
+            sb.table("player_week_usage")
+            .select("player_name, week, offense_snaps, snap_pct")
+            .eq("season", USAGE_SEASON)
+            .eq("season_type", "REG")
+            .in_("team_abbr", list(aliases))
+            .execute()
+            .data
+            or []
+        )
+        roster = (
+            sb.table("rosters_2026")
+            .select("full_name, team_abbr, status")
+            .in_("full_name", names)
+            .execute()
+            .data
+            or []
+        )
+    except Exception:
+        return None, {}
+    if not usage:
+        return None, {}
+
+    latest = max(int(r["week"]) for r in usage)
+    last_snap: dict[str, int] = {}
+    for r in usage:
+        if (r.get("offense_snaps") or 0) > 0 or float(r.get("snap_pct") or 0) > 0:
+            key = _norm_name(r["player_name"])
+            last_snap[key] = max(last_snap.get(key, 0), int(r["week"]))
+
+    roster_by_name: dict[str, list[dict]] = defaultdict(list)
+    for r in roster:
+        roster_by_name[_norm_name(r["full_name"])].append(r)
+
+    out: dict[str, str] = {}
+    for name in names:
+        key = _norm_name(name)
+        rows = roster_by_name.get(key) or []
+        here = [r for r in rows if _canon_team(r.get("team_abbr") or "") in {_canon_team(a) for a in aliases}]
+        if rows and not here:
+            out[key] = f"no longer on the roster (now {rows[0].get('team_abbr')})"
+            continue
+        status = ((here[0].get("status") if here else "") or "").upper()
+        if status in INACTIVE_ROSTER_STATUS:
+            out[key] = "on a reserve list (IR/PUP/NFI)" if status == "RES" else f"roster status {status}"
+            continue
+        last = last_snap.get(key)
+        if last is None:
+            out[key] = f"no offensive snaps through Week {latest}"
+        elif latest - last >= 2:
+            out[key] = f"no offensive snaps since Week {last}"
+    return latest, out
+
+
+def _filter_live_depth(
+    depth: list[dict], battles: list[dict], team_abbr: str, injuries: list[dict] | None
+) -> tuple[list[dict], list[dict]]:
+    """Drop gone players from depth; strip non-playing candidates from contested battles.
+
+    A candidate who is merely injured short-term (Out/Doubtful/Questionable on the injury
+    board) stays in the battle with an injury tag; he still owns the role when healthy.
+    """
+    names = {d.get("name") for d in depth if d.get("name")}
+    for b in battles:
+        names.update(c for c in (b.get("candidates") or []) if c)
+    latest, reasons = _live_player_status(team_abbr, sorted(n for n in names if n))
+    if latest is None:
+        return depth, battles
+
+    short_term: dict[str, str] = {}
+    for inj in injuries or []:
+        status = (inj.get("status") or "").upper()
+        if not any(s in status for s in ("OUT", "DOUBTFUL", "QUESTIONABLE")):
+            continue
+        short_term[_norm_name(inj.get("name") or "")] = (
+            f"{inj.get('status')} ({inj.get('injury') or 'injury'})"
+        )
+
+    def gone(name: str) -> str | None:
+        key = _norm_name(name)
+        reason = reasons.get(key)
+        if not reason:
+            return None
+        if key in short_term and reason.startswith("no offensive snaps"):
+            return None
+        return reason
+
+    live_depth: list[dict] = []
+    for d in depth:
+        reason = gone(d.get("name") or "")
+        if reason and reason.startswith("no longer on the roster"):
+            continue
+        # Backups without snaps are normal depth; only flag players who cannot play.
+        if reason and not reason.startswith("no offensive snaps"):
+            d = {**d, "not_in_mix": reason}
+        live_depth.append(d)
+
+    live_battles: list[dict] = []
+    for b in battles:
+        active: list[str] = []
+        out_of_mix: list[dict[str, str]] = []
+        for c in b.get("candidates") or []:
+            reason = gone(c)
+            if reason:
+                out_of_mix.append({"name": c, "why": reason})
+            else:
+                active.append(c)
+        nb = {**b, "candidates": active}
+        tags = {c: short_term[_norm_name(c)] for c in active if _norm_name(c) in short_term}
+        if tags:
+            nb["injured_candidates"] = tags
+        if out_of_mix:
+            nb["not_in_mix"] = out_of_mix
+            if len(active) <= 1:
+                nb["status"] = "settled"
+                nb["preseason_note"] = b.get("note")
+                if active:
+                    nb["note"] = (
+                        f"Week {latest}: {active[0]} is the only candidate actually playing; "
+                        "the others are not in the mix (see not_in_mix). Do not call this a battle."
+                    )
+                else:
+                    nb["note"] = (
+                        f"Week {latest}: none of the preseason candidates is playing. Name the "
+                        "slot from skill_usage (who is actually getting the work)."
+                    )
+        live_battles.append(nb)
+    return live_depth, live_battles
 
 
 def _fetch_rookies_2026(team_abbr: str) -> list[dict]:
@@ -734,6 +881,267 @@ def latest_team_game(team_abbr: str) -> dict[str, Any] | None:
     return out
 
 
+def _defense_to_date(season_type: str, through_week: int) -> dict[str, dict[str, Any]]:
+    """Per-team points/pass/rush yards allowed per game this season, with league ranks (1 = stingiest)."""
+    sb = get_client()
+    rows = (
+        sb.table("team_week_results")
+        .select("team_abbr, week, points_against, passing_yards_allowed, rushing_yards_allowed")
+        .eq("season", USAGE_SEASON)
+        .eq("season_type", season_type)
+        .lte("week", through_week)
+        .not_.is_("points_for", "null")
+        .execute()
+        .data
+        or []
+    )
+    acc: dict[str, dict[str, float]] = defaultdict(lambda: {"g": 0, "pa": 0.0, "pass": 0.0, "rush": 0.0})
+    for r in rows:
+        a = acc[_canon_team(r["team_abbr"])]
+        a["g"] += 1
+        a["pa"] += _num(r.get("points_against"))
+        a["pass"] += _num(r.get("passing_yards_allowed"))
+        a["rush"] += _num(r.get("rushing_yards_allowed"))
+    per_game = {
+        team: {
+            "games": int(a["g"]),
+            "points_allowed_pg": round(a["pa"] / a["g"], 1),
+            "pass_yds_allowed_pg": round(a["pass"] / a["g"], 1),
+            "rush_yds_allowed_pg": round(a["rush"] / a["g"], 1),
+        }
+        for team, a in acc.items()
+        if a["g"]
+    }
+    for key, rank_key in (
+        ("points_allowed_pg", "points_allowed_rank"),
+        ("pass_yds_allowed_pg", "pass_defense_rank"),
+        ("rush_yds_allowed_pg", "run_defense_rank"),
+    ):
+        ordered = sorted(per_game, key=lambda t: per_game[t][key])
+        for i, team in enumerate(ordered, start=1):
+            per_game[team][rank_key] = i
+    return per_game
+
+
+def _week_line(r: dict[str, Any]) -> str:
+    pos = (r.get("position") or "").upper()
+    parts: list[str] = []
+    if pos == "QB" or (r.get("pass_attempts") or 0) >= 5:
+        parts.append(
+            f"{r.get('completions') or 0}/{r.get('pass_attempts') or 0}, "
+            f"{r.get('passing_yards') or 0} pass yds, {r.get('passing_tds') or 0} TD, "
+            f"{r.get('interceptions') or 0} INT"
+        )
+    if (r.get("carries") or 0) > 0:
+        parts.append(f"{r.get('carries')} car {r.get('rushing_yards') or 0} yds {r.get('rushing_tds') or 0} TD")
+    if (r.get("targets") or 0) > 0:
+        parts.append(
+            f"{r.get('receptions') or 0}/{r.get('targets')} rec {r.get('receiving_yards') or 0} yds "
+            f"{r.get('receiving_tds') or 0} TD"
+        )
+    return "; ".join(parts)
+
+
+def _injury_label(injury_type: str | None, detail: str | None) -> str:
+    kind = (injury_type or "").strip()
+    extra = (detail or "").strip()
+    if not extra or extra.lower() in {"not specified", kind.lower()}:
+        return kind or extra
+    return f"{kind} ({extra.lower()})" if kind else extra
+
+
+def league_week_board(issue_date: date) -> dict[str, Any] | None:
+    """League-wide facts for the weekly opener: scores, records, PPR leaders, injuries, next slate."""
+    sb = get_client()
+    try:
+        results = (
+            sb.table("team_week_results")
+            .select("week, team_abbr, opponent_abbr, home, gameday, points_for, points_against, result")
+            .eq("season", USAGE_SEASON)
+            .eq("season_type", "REG")
+            .execute()
+            .data
+            or []
+        )
+    except Exception:
+        return None
+    played = [
+        r for r in results
+        if r.get("points_for") is not None and str(r.get("gameday") or "") <= issue_date.isoformat()
+    ]
+    if not played:
+        return None
+    week = max(int(r["week"]) for r in played)
+
+    games = []
+    for r in played:
+        if int(r["week"]) == week and r.get("home"):
+            games.append({
+                "away": _canon_team(r["opponent_abbr"]),
+                "home": _canon_team(r["team_abbr"]),
+                "away_pts": r["points_against"],
+                "home_pts": r["points_for"],
+                "gameday": r.get("gameday"),
+            })
+    games.sort(key=lambda g: (g["gameday"] or "", g["home"]))
+
+    rec: dict[str, list[int]] = defaultdict(lambda: [0, 0, 0])
+    for r in played:
+        pf, pa = _num(r["points_for"]), _num(r["points_against"])
+        rec[_canon_team(r["team_abbr"])][0 if pf > pa else 1 if pf < pa else 2] += 1
+    records = {
+        t: f"{w}-{l}" + (f"-{tie}" if tie else "") for t, (w, l, tie) in sorted(rec.items())
+    }
+    unbeaten = sorted(t for t, (w, l, tie) in rec.items() if l == 0 and tie == 0)
+    winless = sorted(t for t, (w, l, tie) in rec.items() if w == 0 and tie == 0)
+
+    usage: list[dict[str, Any]] = []
+    page = 1000
+    while True:
+        batch = (
+            sb.table("player_week_usage")
+            .select(
+                "week, team_abbr, player_name, position, fantasy_points_ppr, completions, pass_attempts, "
+                "passing_yards, passing_tds, interceptions, carries, rushing_yards, rushing_tds, "
+                "targets, receptions, receiving_yards, receiving_tds"
+            )
+            .eq("season", USAGE_SEASON)
+            .eq("season_type", "REG")
+            .lte("week", week)
+            .in_("position", ["QB", "RB", "WR", "TE"])
+            .order("week")
+            .order("player_name")
+            .range(len(usage), len(usage) + page - 1)
+            .execute()
+            .data
+            or []
+        )
+        usage.extend(batch)
+        if len(batch) < page:
+            break
+    this_week = [r for r in usage if int(r["week"]) == week]
+    this_week.sort(key=lambda r: -_num(r.get("fantasy_points_ppr")))
+    top_ppr = [
+        {
+            "name": r["player_name"],
+            "team": _canon_team(r["team_abbr"]),
+            "pos": r["position"],
+            "ppr": round(_num(r.get("fantasy_points_ppr")), 1),
+            "line": _week_line(r),
+        }
+        for r in this_week[:15]
+    ]
+    season_ppr: dict[tuple[str, str], float] = defaultdict(float)
+    for r in usage:
+        season_ppr[(_norm_name(r["player_name"]), _canon_team(r["team_abbr"]))] += _num(
+            r.get("fantasy_points_ppr")
+        )
+
+    injuries: list[dict[str, Any]] = []
+    try:
+        inj_rows = (
+            sb.table("player_injury_status")
+            .select("player_name, team_abbr, position, status, injury_type, injury_detail, return_date, short_comment")
+            .eq("season", USAGE_SEASON)
+            .in_("position", ["QB", "RB", "WR", "TE"])
+            .execute()
+            .data
+            or []
+        )
+    except Exception:
+        inj_rows = []
+    for r in inj_rows:
+        status = (r.get("status") or "").upper()
+        serious = any(s in status for s in ("OUT", "DOUBTFUL", "RESERVE", "IR"))
+        if not serious and "QUESTIONABLE" not in status:
+            continue
+        pts = season_ppr.get((_norm_name(r["player_name"]), _canon_team(r["team_abbr"])), 0.0)
+        if pts < (35 if serious else 50):
+            continue
+        injuries.append({
+            "name": r["player_name"],
+            "team": _canon_team(r["team_abbr"]),
+            "pos": r.get("position"),
+            "status": r.get("status"),
+            "injury": _injury_label(r.get("injury_type"), r.get("injury_detail")),
+            "return_date": r.get("return_date"),
+            "season_ppr": round(pts, 1),
+            "note": (r.get("short_comment") or "")[:220],
+        })
+    injuries.sort(key=lambda r: -r["season_ppr"])
+
+    nxt = [r for r in results if int(r["week"]) == week + 1]
+    next_games = sorted(
+        (
+            {"away": _canon_team(r["opponent_abbr"]), "home": _canon_team(r["team_abbr"]), "gameday": r.get("gameday")}
+            for r in nxt
+            if r.get("home")
+        ),
+        key=lambda g: (g["gameday"] or "", g["home"]),
+    )
+    playing = {g["away"] for g in next_games} | {g["home"] for g in next_games}
+    byes = sorted(t for t in records if t not in playing) if next_games else []
+
+    return {
+        "week": week,
+        "games": games,
+        "records": records,
+        "unbeaten": unbeaten,
+        "winless": winless,
+        "top_ppr": top_ppr,
+        "notable_injuries": injuries[:14],
+        "next_week": {"week": week + 1, "games": next_games, "byes": byes},
+    }
+
+
+def next_team_game(team_abbr: str) -> dict[str, Any] | None:
+    """Next scheduled game (or bye) with the opponent's defense to date, for matchup takes."""
+    latest = latest_team_game(team_abbr)
+    if not latest or latest.get("season_type") != "REG":
+        return None
+    week = int(latest["week"]) + 1
+    sb = get_client()
+    try:
+        rows = (
+            sb.table("team_week_results")
+            .select("week, opponent_abbr, home, gameday")
+            .eq("season", USAGE_SEASON)
+            .eq("season_type", "REG")
+            .eq("week", week)
+            .in_("team_abbr", usage_team_abbrs(team_abbr))
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+    except Exception:
+        return None
+    if not rows:
+        return {"week": week, "bye": True}
+    row = rows[0]
+    opp = _canon_team(row.get("opponent_abbr") or "")
+    out: dict[str, Any] = {
+        "week": week,
+        "opponent": opp,
+        "home": row.get("home"),
+        "gameday": row.get("gameday"),
+    }
+    try:
+        defense = _defense_to_date("REG", int(latest["week"])).get(opp)
+    except Exception:
+        defense = None
+    if defense:
+        out["opponent_defense_2026"] = defense
+    stats = _fetch_one("nfl_team_context_2025", opp)
+    if stats:
+        out["opponent_defense_2025"] = {
+            k: stats[k]
+            for k in ("def_ppg_allowed_rank", "def_ypg_allowed_rank")
+            if stats.get(k) is not None
+        }
+    return out
+
+
 def latest_week_usage_players(team_abbr: str) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     """Latest usage window plus compact rows keyed by player name."""
     usage = _fetch_skill_usage(team_abbr)
@@ -896,11 +1304,14 @@ def load_compose_context(team: Team) -> str:
     if collisions:
         block["name_collisions"] = collisions
 
+    injuries = _fetch_skill_injuries(abbr)
     fantasy_depth = _fetch_fantasy_skill_depth(abbr, exp_map)
+    skill_battles = _fetch_skill_position_battles(abbr)
+    fantasy_depth, skill_battles = _filter_live_depth(
+        fantasy_depth, skill_battles, abbr, injuries
+    )
     if fantasy_depth:
         block["fantasy_skill_depth"] = fantasy_depth
-
-    skill_battles = _fetch_skill_position_battles(abbr)
     if skill_battles:
         block["skill_position_battles"] = skill_battles
 
@@ -915,7 +1326,9 @@ def load_compose_context(team: Team) -> str:
     latest_game = latest_team_game(abbr)
     if latest_game:
         block["latest_game"] = latest_game
-    injuries = _fetch_skill_injuries(abbr)
+    next_game = next_team_game(abbr)
+    if next_game:
+        block["next_game"] = next_game
     if injuries:
         block["injury_status"] = injuries
 
