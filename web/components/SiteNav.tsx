@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState, type MouseEvent } from "react";
 import type { Viewer } from "@/lib/auth";
 import { getDivisionGroups } from "@/lib/teams";
 
@@ -31,6 +32,14 @@ type Props = {
 export function SiteNav({ viewer = null }: Props) {
   const pathname = usePathname();
   const divisions = getDivisionGroups();
+  const [teamsDismissed, setTeamsDismissed] = useState(false);
+
+  function dismissTeamsOnLinkClick(event: MouseEvent<HTMLDivElement>) {
+    const link = (event.target as HTMLElement).closest("a");
+    if (!link) return;
+    setTeamsDismissed(true);
+    link.blur();
+  }
 
   return (
     <nav className="site-nav" aria-label="Main">
@@ -45,7 +54,11 @@ export function SiteNav({ viewer = null }: Props) {
         </Link>
       ))}
 
-      <div className="site-nav-dropdown">
+      <div
+        className={teamsDismissed ? "site-nav-dropdown is-dismissed" : "site-nav-dropdown"}
+        onClick={dismissTeamsOnLinkClick}
+        onMouseLeave={() => setTeamsDismissed(false)}
+      >
         <Link
           href="/teams"
           className={isTeamsActive(pathname) ? "site-nav-link active" : "site-nav-link"}

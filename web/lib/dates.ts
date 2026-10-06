@@ -109,17 +109,67 @@ export function nflWeekNumber(weeklyIssueDate: string): number | null {
   return 1 + Math.floor(delta / 7);
 }
 
-/** Display title: "Week 1 Recap" in season, date range in preseason. */
-export function recapLabel(weeklyIssueDate: string): string {
+/**
+ * Weekly issues published before Week 1, oldest first. Numbered by position rather
+ * than by date so a skipped week never leaves a gap: the last PRESEASON_WEEKS are
+ * preseason, everything earlier is training camp counting up from Week 1.
+ */
+const PRE_WEEK1_ISSUE_DATES = [
+  "2026-06-08",
+  "2026-06-15",
+  "2026-06-22",
+  "2026-06-29",
+  "2026-07-07",
+  "2026-07-20",
+  "2026-07-27",
+  "2026-08-03",
+  "2026-08-10",
+  "2026-08-17",
+  "2026-08-24",
+  "2026-08-31",
+  "2026-09-07",
+  "2026-09-14",
+] as const;
+const PRESEASON_WEEKS = 3;
+
+export type SeasonPhase = "regular" | "preseason" | "camp";
+
+export function seasonWeek(
+  weeklyIssueDate: string
+): { phase: SeasonPhase; week: number } | null {
   const n = nflWeekNumber(weeklyIssueDate);
-  if (n) return `Week ${n} Recap`;
+  if (n) return { phase: "regular", week: n };
+  const idx = PRE_WEEK1_ISSUE_DATES.indexOf(
+    weeklyIssueDate.slice(0, 10) as (typeof PRE_WEEK1_ISSUE_DATES)[number]
+  );
+  if (idx < 0) return null;
+  const campWeeks = PRE_WEEK1_ISSUE_DATES.length - PRESEASON_WEEKS;
+  return idx >= campWeeks
+    ? { phase: "preseason", week: idx - campWeeks + 1 }
+    : { phase: "camp", week: idx + 1 };
+}
+
+const PHASE_PREFIX: Record<SeasonPhase, string> = {
+  regular: "Week",
+  preseason: "Preseason Week",
+  camp: "Training Camp Week",
+};
+
+/** Display title: "Week 1 Recap", "Preseason Week 3 Recap", "Training Camp Week 11 Recap". */
+export function recapLabel(weeklyIssueDate: string): string {
+  const sw = seasonWeek(weeklyIssueDate);
+  if (sw) return `${PHASE_PREFIX[sw.phase]} ${sw.week} Recap`;
   return weekRangeLabel(weeklyIssueDate);
 }
 
-/** Short index-tab label: "Week 3" in season, "Sep 7–13" in preseason. */
+/** Short index-tab label: "Week 3", "Preseason Week 2", "Camp Week 11", else "Sep 7–13". */
 export function weekTabLabel(weeklyIssueDate: string): string {
-  const n = nflWeekNumber(weeklyIssueDate);
-  if (n) return `Week ${n}`;
+  const sw = seasonWeek(weeklyIssueDate);
+  if (sw) {
+    if (sw.phase === "regular") return `Week ${sw.week}`;
+    if (sw.phase === "preseason") return `Preseason Week ${sw.week}`;
+    return `Camp Week ${sw.week}`;
+  }
   const { weekStart, weekEnd } = weekContentRange(weeklyIssueDate);
   const start = `${MONTH_SHORT[weekStart.m - 1]} ${weekStart.d}`;
   const end =
@@ -130,7 +180,7 @@ export function weekTabLabel(weeklyIssueDate: string): string {
 }
 
 export function weeklyEditionLabel(weeklyIssueDate: string): string {
-  return nflWeekNumber(weeklyIssueDate) ? recapLabel(weeklyIssueDate) : "Weekly";
+  return seasonWeek(weeklyIssueDate) ? recapLabel(weeklyIssueDate) : "Weekly";
 }
 
 export function weekRecapSubtitle(weeklyIssueDate: string): string {
@@ -138,7 +188,6 @@ export function weekRecapSubtitle(weeklyIssueDate: string): string {
   const fmt = ({ y, m, d }: CalendarDate) =>
     `${WEEKDAY_SHORT[utcWeekday(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`)]}, ${MONTH_SHORT[m - 1]} ${d}`;
   const range = `${fmt(weekStart)} through ${fmt(weekEnd)}`;
-  const n = nflWeekNumber(weeklyIssueDate);
-  if (n) return `Week ${n} Recap · ${range}`;
+  if (seasonWeek(weeklyIssueDate)) return `${recapLabel(weeklyIssueDate)} · ${range}`;
   return `Week in review: ${range}`;
 }

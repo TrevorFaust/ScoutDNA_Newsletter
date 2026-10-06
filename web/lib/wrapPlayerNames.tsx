@@ -68,6 +68,27 @@ function bareToken(token: string): string {
   return token.replace(/['’]s$/, "").replace(/[.'’-]+$/, "");
 }
 
+/**
+ * Registry entries whose surname (or sole name) appears in `text`. Every matcher
+ * path (full name, section surname, team surname) needs the surname in the prose,
+ * so chips are unchanged.
+ */
+export function entriesMentionedIn(
+  entries: PlayerLookupEntry[],
+  text: string
+): PlayerLookupEntry[] {
+  const keys = new Set<string>();
+  for (const raw of text.match(/[A-Za-z][A-Za-z'’.-]*/g) ?? []) {
+    keys.add(tokenKey(raw));
+    keys.add(tokenKey(bareToken(raw)));
+    for (const part of raw.split("-")) if (part) keys.add(tokenKey(bareToken(part)));
+  }
+  return entries.filter((entry) => {
+    const name = surnameOf(entry) ?? firstNameOf(entry);
+    return name ? keys.has(tokenKey(name)) : false;
+  });
+}
+
 export type ChipMatcher = {
   fullNameIndex: Map<string, PlayerLookupEntry[]>;
   surnames: Map<string, PlayerLookupEntry>;

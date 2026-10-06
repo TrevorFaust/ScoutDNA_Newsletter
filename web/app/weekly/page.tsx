@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { EditionTicket } from "@/components/EditionTicket";
+import { PageMasthead } from "@/components/PageMasthead";
 import { WeeklyReel } from "@/components/WeeklyReel";
 import { getViewer } from "@/lib/auth";
 import { fetchWeeklyReel } from "@/lib/issues";
@@ -28,17 +29,18 @@ export default async function WeeklyPage() {
         <span aria-current="page">Weekly</span>
       </nav>
 
-      <header className="page-header page-header-center">
-        <span className="edition-badge edition-weekly">Week recaps</span>
-        <h1>Week recaps</h1>
-        <p className="page-lead weekly-lead">
+      <PageMasthead
+        eyebrow="Tuesday edition"
+        title="Week recaps"
+      >
+        <p className="masthead-lead">
           Monday night ends and by Tuesday morning, all 32 teams have their week
           on paper: the results, the injuries, who got the work, and what the
           reporting says comes next. Pull an older week and hold it up against
           this one. See who kept the job, which rumors turned into moves, and
           which ones went quiet.
         </p>
-      </header>
+      </PageMasthead>
 
       {error && (
         <p className="alert">

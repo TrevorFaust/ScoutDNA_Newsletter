@@ -173,18 +173,62 @@ export function usableRumorMarkdown(
   return "";
 }
 
-function rumorSentences(markdown: string | null | undefined): string[] {
-  if (!markdown?.trim()) return [];
+/**
+ * Weekly compose writes rumors as reporting, not with the word "rumor":
+ * "with reports suggesting the move was made above Brad Holmes."
+ * Prose-only; footnote matching stays on RUMOR_SOURCE so reject keeps cited notes.
+ */
+const SPECULATION_PROSE =
+  /\breportedly\b|\breports?\s+(?:suggest|say|indicate|claim|describ)\w*|\breporting\b[^.]{0,60}\b(?:describ|suggest|indicat)\w*|\baccording to\b|\bspeculat\w*|\bdays\s+(?:appear|seem)\s+to\s+be\s+numbered\b|\bhot seat\b|\bcould be (?:traded|moved|released|fired)\b|\b(?:trade|front-office)\s+(?:buzz|chatter)\b/i;
+
+function splitSentences(markdown: string): string[] {
   return markdown
     .split(/\n+/)
-    .flatMap((line) => line.split(/(?<=[.!?])\s+/))
+    .flatMap((line) => line.split(/(?<=[.!?][¹²³⁴⁵⁶⁷⁸⁹⁰]*)\s+/))
     .map((part) => part.trim())
-    .filter(
-      (part) =>
-        part.length > 0 &&
-        !/^#{1,6}\s/.test(part) &&
-        isRumorSourceLabel(part)
-    );
+    .filter((part) => part.length > 0 && !/^#{1,6}\s/.test(part));
+}
+
+function rumorSentences(markdown: string | null | undefined): string[] {
+  if (!markdown?.trim()) return [];
+  return splitSentences(markdown).filter((part) => isRumorSourceLabel(part));
+}
+
+function speculationSentences(markdown: string | null | undefined): string[] {
+  if (!markdown?.trim()) return [];
+  return splitSentences(markdown).filter((part) => SPECULATION_PROSE.test(part));
+}
+
+/** Rumor sentences in weekly prose: explicit rumor words first, reporting language as fallback. */
+export function weeklyRumorSentences(intro: string, fantasy: string): string[] {
+  const explicit = [...rumorSentences(intro), ...rumorSentences(fantasy)];
+  if (explicit.length) return explicit;
+  return [...speculationSentences(intro), ...speculationSentences(fantasy)];
+}
+
+/**
+ * Swap rumor sentences in weekly prose. The first hit takes `replacement`
+ * (empty string = cut); later hits are cut.
+ */
+export function replaceRumorSentences(
+  markdown: string,
+  sentences: string[],
+  replacement: string
+): { markdown: string; replaced: boolean } {
+  let next = markdown;
+  let replaced = false;
+  for (const sentence of sentences) {
+    if (!next.includes(sentence)) continue;
+    next = next.replace(sentence, replaced ? "" : replacement.trim());
+    replaced = true;
+  }
+  next = next
+    .split("\n")
+    .map((line) => line.replace(/ {2,}/g, " ").trimEnd())
+    .filter((line, i, arr) => !(line.trim() === "-" || (line === "" && arr[i - 1] === "")))
+    .join("\n")
+    .trim();
+  return { markdown: next, replaced };
 }
 
 export function cleanRumorLabel(label: string): string {
@@ -246,10 +290,7 @@ export function collectRumorExcerpt(input: {
     const extracted = extractRumorFromTalk(body);
     if (extracted) parts.push(extracted);
   } else {
-    const sentences = [
-      ...rumorSentences(input.intro),
-      ...rumorSentences(input.fantasy),
-    ];
+    const sentences = weeklyRumorSentences(input.intro ?? "", input.fantasy ?? "");
     if (sentences.length) parts.push(sentences.join("\n"));
   }
 

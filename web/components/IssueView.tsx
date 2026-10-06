@@ -10,7 +10,7 @@ import { TeamJumpNav } from "@/components/TeamJumpNav";
 import { TeamSectionBody } from "@/components/TeamSectionBody";
 import { cleanCopy } from "@/lib/cleanCopy";
 import { recapLabel } from "@/lib/dates";
-import { displayIssueTitle, issueHook } from "@/lib/issueTitle";
+import { displayIssueTitle, issueDeck, issueHook, issueStorylines } from "@/lib/issueTitle";
 import { type AdjacentIssue } from "@/lib/issues";
 import { getDivisionGroups } from "@/lib/teams";
 import { hasPendingRumorFlag } from "@/lib/rumorTalk";
@@ -39,6 +39,8 @@ type Props = {
   issueId?: string;
   issueType?: "daily" | "weekly";
   issueDate?: string;
+  /** Per-issue header copy stored on newsletter_issues. */
+  edition?: { hook?: string | null; deck?: string | null; storylines?: unknown };
   leagueSection: string | null;
   leagueFootnotes?: Footnote[];
   sections: Section[];
@@ -60,6 +62,7 @@ export function IssueView({
   issueId,
   issueType = "daily",
   issueDate,
+  edition,
   leagueSection,
   leagueFootnotes = [],
   sections,
@@ -95,9 +98,10 @@ export function IssueView({
     issue_date: dateIso,
     issue_type: issueType,
   });
-  const hook = dateIso
-    ? issueHook({ title, issue_date: dateIso, issue_type: issueType })
-    : null;
+  const titleInput = { title, issue_date: dateIso, issue_type: issueType, ...edition };
+  const hook = dateIso ? issueHook(titleInput) : null;
+  const deck = dateIso && edition?.deck ? issueDeck(titleInput) : null;
+  const storylines = issueStorylines(titleInput);
   const canPublish =
     isAdmin &&
     Boolean(issueId && issueDate) &&
@@ -118,6 +122,17 @@ export function IssueView({
           <span className={`edition-badge edition-${issueType}`}>{editionLabel} Edition</span>
           <h1>{heading}</h1>
           {hook ? <p className="issue-hook">{hook}</p> : null}
+          {deck ? <p className="issue-deck">{deck}</p> : null}
+          {storylines.length > 0 ? (
+            <div className="issue-storylines">
+              <span className="issue-storylines-label">In this edition</span>
+              <ul>
+                {storylines.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
         {isAdmin && issueId && issueDate && (canPublish || status === "published") ? (
           <div className="issue-header-actions">
@@ -185,7 +200,6 @@ export function IssueView({
             return (
               <article key={t.slug} id={t.slug} className="team-section">
                 <h2>{t.name}</h2>
-                <div style={{ fontSize: "0.8rem", color: "var(--muted)" }}>#{t.abbrev}</div>
                 {sec.flags
                   ?.filter(
                     (f) =>
@@ -212,8 +226,8 @@ export function IssueView({
                         ? usageByTeam[sec.teams.abbrev.toUpperCase()]
                         : undefined
                     }
-                    usageMatchup={usageMatchups?.[sec.teams.abbrev.toUpperCase()]}
                     usageWeekLabel={usageWeekLabel}
+                    usageMatchup={usageMatchups?.[sec.teams.abbrev.toUpperCase()]}
                   />
                 )}
               </article>

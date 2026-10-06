@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageMasthead } from "@/components/PageMasthead";
 import { TeamGrid } from "@/components/TeamGrid";
 
 export const metadata = {
@@ -15,9 +16,11 @@ export default function TeamsPage() {
         <span aria-current="page">Teams</span>
       </nav>
 
-      <header className="page-header page-header-center">
-        <h1>All 32 teams</h1>
-        <p className="page-lead teams-lead">
+      <PageMasthead
+        eyebrow="Team files"
+        title="All 32 teams"
+      >
+        <p className="masthead-lead">
           Start with your squad then check out the others. Every club keeps its
           own file, updated each Tuesday with what happened, who got the work,
           and what the reporting says comes next. Read one week or read back to
@@ -27,7 +30,7 @@ export default function TeamsPage() {
         <Link href="/preferences" className="section-link">
           Set your favorite team in Account →
         </Link>
-      </header>
+      </PageMasthead>
 
       <TeamGrid />
     </main>

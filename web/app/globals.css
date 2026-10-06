@@ -97,11 +97,10 @@ main {
 header.site {
   border-bottom: 1px solid var(--border);
   padding: 0;
-  background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+  background: var(--bg-elevated);
   position: sticky;
   top: 0;
   z-index: 100;
-  backdrop-filter: blur(10px);
   box-shadow: 0 1px 0 color-mix(in srgb, var(--ink) 6%, transparent);
 }
 
@@ -264,6 +263,10 @@ header.site a.brand {
   display: block;
 }
 
+.site-nav-dropdown.is-dismissed .teams-dropdown-panel {
+  display: none;
+}
+
 .teams-dropdown-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -373,6 +376,89 @@ header.site a.brand {
 .hero-actions .btn {
   padding: 0.75rem 1.5rem;
   font-size: 1rem;
+}
+
+/* ——— Page masthead (Weekly, Usage, Teams) ——— */
+
+.masthead {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.5rem 0 0.25rem;
+  margin-bottom: 2.25rem;
+  text-align: center;
+}
+
+.masthead::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -0.5rem;
+  left: 50%;
+  width: min(34rem, 100%);
+  height: 12rem;
+  transform: translateX(-50%);
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--forest) 14%, transparent) 0%,
+    transparent 68%
+  );
+  pointer-events: none;
+}
+
+.masthead-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin: 0 0 0.85rem;
+  font-family: var(--font-display);
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.masthead-eyebrow::before,
+.masthead-eyebrow::after {
+  content: "";
+  width: 2.25rem;
+  height: 1px;
+  background: color-mix(in srgb, var(--forest) 55%, transparent);
+}
+
+.masthead-title {
+  margin: 0 0 1.25rem;
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.04;
+  text-wrap: balance;
+  animation: masthead-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.masthead-lead {
+  max-width: 44rem;
+  margin: 0 auto 1rem;
+  color: var(--muted);
+  font-size: 1.08rem;
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+@keyframes masthead-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .masthead-title {
+    animation: none;
+  }
 }
 
 /* ——— Buttons ——— */
@@ -550,8 +636,19 @@ header.site a.brand {
   mix-blend-mode: multiply;
 }
 
-.home-feature-chart {
+.home-feature-clipboard {
   height: 6.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-feature-clipboard img {
+  height: 6.6rem;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  display: block;
   mix-blend-mode: multiply;
 }
 
@@ -1000,7 +1097,6 @@ header.site a.brand {
   height: 100%;
 }
 
-.rolodex-card.is-front:hover,
 .rolodex-card.is-front:focus-within {
   --lift: 1;
 }
@@ -1119,7 +1215,7 @@ header.site a.brand {
   font-size: 0.93rem;
   line-height: 1.5;
   display: -webkit-box;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 5;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -1146,6 +1242,16 @@ header.site a.brand {
 .ticket .ticket-aside {
   position: relative;
   z-index: 3;
+}
+
+/* Copy sits above the full-card link so it can be selected. */
+.ticket-meta,
+.ticket-title,
+.ticket-hook,
+.ticket-deck {
+  position: relative;
+  z-index: 3;
+  cursor: text;
 }
 
 .ticket-stub {
@@ -1256,11 +1362,6 @@ header.site a.brand {
   font-size: 3.9rem;
 }
 
-.weekly-lead,
-.teams-lead {
-  max-width: 44rem;
-}
-
 .weekly-shelf {
   margin-bottom: 2.75rem;
 }
@@ -1294,7 +1395,6 @@ header.site a.brand {
     transform: none;
   }
 
-  .rolodex-card.is-front:hover,
   .rolodex-card.is-front:focus-within,
   .rolodex-card:not(.is-front):has(.rolodex-pull:hover) {
     --lift: 0;
@@ -1709,10 +1809,6 @@ button.team-link:disabled {
   text-decoration: underline;
 }
 
-.team-section-tags {
-  margin-bottom: 0.75rem;
-}
-
 .team-section-body h3 {
   font-size: 1rem;
   margin: 1.25rem 0 0.5rem;
@@ -1744,6 +1840,37 @@ button.team-link:disabled {
   margin: 0.45rem 0 0;
   color: var(--muted);
   font-size: 1.05rem;
+}
+
+.issue-deck {
+  margin: 0.5rem 0 0;
+  max-width: 62ch;
+  line-height: 1.55;
+}
+
+.issue-storylines {
+  margin-top: 0.9rem;
+  max-width: 62ch;
+}
+
+.issue-storylines-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.issue-storylines ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  line-height: 1.5;
+}
+
+.issue-storylines li + li {
+  margin-top: 0.2rem;
 }
 
 .issue-header-actions {
@@ -2197,17 +2324,6 @@ button.team-link:disabled {
 
 .team-section h2 {
   margin-bottom: 0.25rem;
-}
-
-.tag {
-  display: inline-block;
-  font-size: 0.7rem;
-  padding: 0.1rem 0.45rem;
-  border-radius: 4px;
-  background: var(--tag);
-  color: var(--accent-dim);
-  margin-right: 0.35rem;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--forest) 18%, transparent);
 }
 
 .references {
@@ -2988,12 +3104,6 @@ main.usage-admin {
   max-width: none;
 }
 
-.usage-header-links {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
 .usage-filters {
   display: flex;
   flex-wrap: wrap;
@@ -3020,24 +3130,6 @@ main.usage-admin {
   width: auto;
   min-width: 6.5rem;
   margin: 0;
-}
-
-.usage-header {
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-
-.usage-header .camp-admin-lead {
-  margin-inline: auto;
-  font-size: 1.05rem;
-  line-height: 1.6;
-  text-wrap: pretty;
-}
-
-.usage-header .usage-header-links {
-  justify-content: center;
-  width: 100%;
 }
 
 .usage-admin .usage-filters {
@@ -3148,67 +3240,6 @@ button.metric-chip.is-pinned {
   }
 }
 
-.usage-table-wrap {
-  overflow-x: auto;
-  margin-top: 0.5rem;
-}
-
-.usage-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
-}
-
-.usage-table th,
-.usage-table td {
-  text-align: right;
-  padding: 0.3rem 0.45rem;
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-}
-
-.usage-table th.usage-fpts {
-  white-space: normal;
-  line-height: 1.25;
-}
-
-.usage-fpts-format {
-  white-space: nowrap;
-  font-weight: 500;
-  color: var(--muted);
-}
-
-.usage-table th.usage-name,
-.usage-table td.usage-name,
-.usage-table th.usage-pos,
-.usage-table td.usage-pos {
-  text-align: left;
-}
-
-.team-usage-panel {
-  margin: 1.25rem 0 0.5rem;
-  padding: 0.85rem 1rem 0.6rem;
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--accent);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-
-.team-usage-panel-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
-  margin-bottom: 0.35rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--border);
-}
-
-.team-usage-panel .usage-table tbody tr:last-child td {
-  border-bottom: none;
-}
-
 .usage-team-heading {
   display: flex;
   flex-wrap: wrap;
@@ -3273,6 +3304,67 @@ button.metric-chip.is-pinned {
 
 .matchup-result-l {
   color: #a4453a;
+}
+
+.usage-table-wrap {
+  overflow-x: auto;
+  margin-top: 0.5rem;
+}
+
+.usage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.usage-table th,
+.usage-table td {
+  text-align: right;
+  padding: 0.3rem 0.45rem;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.usage-table th.usage-fpts {
+  white-space: normal;
+  line-height: 1.25;
+}
+
+.usage-fpts-format {
+  white-space: nowrap;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.usage-table th.usage-name,
+.usage-table td.usage-name,
+.usage-table th.usage-pos,
+.usage-table td.usage-pos {
+  text-align: left;
+}
+
+.team-usage-panel {
+  margin: 1.25rem 0 0.5rem;
+  padding: 0.85rem 1rem 0.6rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.team-usage-panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.35rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.team-usage-panel .usage-table tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .team-usage-panel-title {

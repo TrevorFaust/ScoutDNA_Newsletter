@@ -58,15 +58,6 @@ export function TeamSectionBody({
 
   return (
     <div className="prose-team team-section-body">
-      {section.tags?.length > 0 && (
-        <div className="team-section-tags">
-          {section.tags.map((tag) => (
-            <span key={tag} className="tag">
-              {tag}
-            </span>
-          ))}
-        </div>
-      )}
       {intro && (
         <MarkdownBlock
           content={intro}

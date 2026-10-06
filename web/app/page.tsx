@@ -44,7 +44,7 @@ export default async function HomePage({
           News for <em>every</em> team
         </h1>
         <p className="hero-lead">
-          Your club had a week. So did the other 31. Don&apos;t miss a snap.
+          Your club had a week, so did the other 31. Don&apos;t miss a snap.
         </p>
         <div className="hero-actions">
           {latestWeekly && latestHref && (

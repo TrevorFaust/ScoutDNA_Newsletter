@@ -81,7 +81,23 @@ async function fetchAllNameRows(
   return rows;
 }
 
-export async function fetchPlayerPositionLookup(
+// The registry spans ~8 tables and thousands of rows; rebuild it at most every 10 minutes.
+const LOOKUP_TTL_MS = 10 * 60 * 1000;
+let lookupCache: { expires: number; value: Promise<PlayerPositionLookup> } | null = null;
+
+export function fetchPlayerPositionLookup(
+  supabase: SupabaseClient
+): Promise<PlayerPositionLookup> {
+  if (lookupCache && lookupCache.expires > Date.now()) return lookupCache.value;
+  const value = buildPlayerPositionLookup(supabase);
+  lookupCache = { expires: Date.now() + LOOKUP_TTL_MS, value };
+  value.catch(() => {
+    if (lookupCache?.value === value) lookupCache = null;
+  });
+  return value;
+}
+
+async function buildPlayerPositionLookup(
   supabase: SupabaseClient
 ): Promise<PlayerPositionLookup> {
   const byNormalized = new Map<string, PlayerLookupEntry>();

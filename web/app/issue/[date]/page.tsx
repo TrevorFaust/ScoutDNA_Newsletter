@@ -9,6 +9,7 @@ import {
 } from "@/lib/playerRegistry";
 import { fetchUsageForWeek, usageByTeamAbbr } from "@/lib/playerUsage";
 import { fetchTeamGames, type TeamGame } from "@/lib/teamGames";
+import { entriesMentionedIn } from "@/lib/wrapPlayerNames";
 
 type Props = {
   params: Promise<{ date: string }>;
@@ -17,17 +18,25 @@ type Props = {
 
 export const dynamic = "force-dynamic";
 
+function collectStrings(value: unknown, out: string[] = []): string[] {
+  if (typeof value === "string") out.push(value);
+  else if (Array.isArray(value)) for (const item of value) collectStrings(item, out);
+  else if (value && typeof value === "object")
+    for (const item of Object.values(value)) collectStrings(item, out);
+  return out;
+}
+
 export default async function IssuePage({ params, searchParams }: Props) {
   const { date } = await params;
   const { team: teamParam } = await searchParams;
-  const viewer = await getViewer();
   const supabase = createServerClient();
+  const lookupPromise = fetchPlayerPositionLookup(supabase);
+  lookupPromise.catch(() => undefined);
 
-  const { data: issue } = await supabase
-    .from("newsletter_issues")
-    .select("*")
-    .eq("slug", date)
-    .maybeSingle();
+  const [viewer, { data: issue }] = await Promise.all([
+    getViewer(),
+    supabase.from("newsletter_issues").select("*").eq("slug", date).maybeSingle(),
+  ]);
 
   if (!issue || (issue.status !== "published" && !viewer?.isAdmin)) {
     return (
@@ -38,44 +47,37 @@ export default async function IssuePage({ params, searchParams }: Props) {
     );
   }
 
-  const { data: sections } = await supabase
-    .from("newsletter_sections")
-    .select("*, newsletter_teams(slug, name, abbrev)")
-    .eq("issue_id", issue.id)
-    .order("sort_order");
-
   const favorite = teamParam ?? viewer?.favoriteTeamSlug ?? undefined;
-
-  const playerLookup = await fetchPlayerPositionLookup(supabase);
-  const playerEntries = serializePlayerLookup(playerLookup);
-
-  const adjacent = await fetchAdjacentIssues(
-    issue.issue_date,
-    issue.issue_type as "daily" | "weekly",
-    { includeDrafts: Boolean(viewer?.isAdmin) }
-  );
-
   const issueDateIso = String(issue.issue_date).slice(0, 10);
   const weekNum =
     issue.issue_type === "weekly" ? nflWeekNumber(issueDateIso) : null;
   const gamesPromise = weekNum
     ? fetchTeamGames(2026, "REG").catch(() => null)
     : null;
-  let usageByTeam: ReturnType<typeof usageByTeamAbbr> | undefined;
-  let usageWeekLabel: string | undefined;
-  if (weekNum) {
-    try {
-      const rows = await fetchUsageForWeek({
-        season: 2026,
-        seasonType: "REG",
-        week: weekNum,
-      });
-      usageByTeam = usageByTeamAbbr(rows);
-      usageWeekLabel = `Week ${weekNum}`;
-    } catch {
-      usageByTeam = undefined;
-    }
-  }
+
+  const [{ data: sections }, playerLookup, adjacent, usageRows] = await Promise.all([
+    supabase
+      .from("newsletter_sections")
+      .select("*, newsletter_teams(slug, name, abbrev)")
+      .eq("issue_id", issue.id)
+      .order("sort_order"),
+    lookupPromise,
+    fetchAdjacentIssues(issue.issue_date, issue.issue_type as "daily" | "weekly", {
+      includeDrafts: Boolean(viewer?.isAdmin),
+    }),
+    weekNum
+      ? fetchUsageForWeek({ season: 2026, seasonType: "REG", week: weekNum }).catch(
+          () => null
+        )
+      : null,
+  ]);
+
+  const playerEntries = entriesMentionedIn(
+    serializePlayerLookup(playerLookup),
+    collectStrings([issue.title, issue.league_section, sections]).join("\n")
+  );
+  const usageByTeam = usageRows ? usageByTeamAbbr(usageRows) : undefined;
+  const usageWeekLabel = usageRows && weekNum ? `Week ${weekNum}` : undefined;
   const games = await gamesPromise;
   const usageMatchups: Record<string, TeamGame> = {};
   if (games && weekNum) {
@@ -92,6 +94,7 @@ export default async function IssuePage({ params, searchParams }: Props) {
       issueId={issue.id}
       issueType={issue.issue_type as "daily" | "weekly"}
       issueDate={date}
+      edition={{ hook: issue.hook, deck: issue.deck, storylines: issue.storylines }}
       leagueSection={issue.league_section}
       leagueFootnotes={
         (issue.league_footnotes as { n: number; label: string; url: string }[]) ??

@@ -55,47 +55,96 @@ export type UsageFilters = {
 };
 
 const PAGE = 1000;
+const MAX_ROWS = 8000;
+const USAGE_COLUMNS =
+  "season,season_type,week,team_abbr,gsis_id,player_name,position,offense_snaps,snap_pct,pass_attempts,completions,passing_yards,passing_tds,interceptions,carries,rushing_yards,rushing_tds,targets,receptions,receiving_yards,receiving_tds,receiving_air_yards,fantasy_points_ppr,rush_share,rb_rush_share,target_share,air_yards_share,touch_share,team_carries,team_targets,team_air_yards";
+const TEAM_ALIASES: Record<string, string[]> = {
+  LAR: ["LAR", "LA"],
+  LA: ["LA", "LAR"],
+  ARI: ["ARI", "AZ"],
+  AZ: ["AZ", "ARI"],
+  WAS: ["WAS", "WSH"],
+  WSH: ["WSH", "WAS"],
+};
 
-async function fetchAllUsage(
+// Usage rows only change after the nflverse sync, so serve repeat loads from memory.
+const USAGE_TTL_MS = 5 * 60 * 1000;
+const USAGE_CACHE_MAX = 60;
+const usageCache = new Map<string, { expires: number; value: Promise<unknown> }>();
+
+function cachedUsage<T>(key: string, load: () => Promise<T>): Promise<T> {
+  const hit = usageCache.get(key);
+  if (hit && hit.expires > Date.now()) return hit.value as Promise<T>;
+  const value = load();
+  usageCache.delete(key);
+  usageCache.set(key, { expires: Date.now() + USAGE_TTL_MS, value });
+  if (usageCache.size > USAGE_CACHE_MAX) {
+    const oldest = usageCache.keys().next().value;
+    if (oldest !== undefined) usageCache.delete(oldest);
+  }
+  value.catch(() => usageCache.delete(key));
+  return value;
+}
+
+function fetchAllUsage(
   season: number,
   seasonType: UsageSeasonType,
   team?: string | null
 ): Promise<PlayerWeekUsage[]> {
+  const teamKey = team?.toUpperCase() ?? "";
+  return cachedUsage(`rows:${season}:${seasonType}:${teamKey}`, () =>
+    loadAllUsage(season, seasonType, teamKey || null)
+  );
+}
+
+/** Start the row fetch early so it overlaps other awaits; errors surface on the real read. */
+export function prefetchUsageRows(
+  season: number,
+  seasonType: UsageSeasonType,
+  team?: string | null
+) {
+  fetchAllUsage(season, seasonType, team).catch(() => undefined);
+}
+
+async function loadAllUsage(
+  season: number,
+  seasonType: UsageSeasonType,
+  team: string | null
+): Promise<PlayerWeekUsage[]> {
   const sb = createServerClient();
-  const rows: PlayerWeekUsage[] = [];
-  for (let from = 0; from < 8000; from += PAGE) {
+  const pageQuery = (from: number, withCount: boolean) => {
     let q = sb
       .from("player_week_usage")
-      .select(
-        "season,season_type,week,team_abbr,gsis_id,player_name,position,offense_snaps,snap_pct,pass_attempts,completions,passing_yards,passing_tds,interceptions,carries,rushing_yards,rushing_tds,targets,receptions,receiving_yards,receiving_tds,receiving_air_yards,fantasy_points_ppr,rush_share,rb_rush_share,target_share,air_yards_share,touch_share,team_carries,team_targets,team_air_yards"
-      )
+      .select(USAGE_COLUMNS, withCount ? { count: "exact" } : undefined)
       .eq("season", season)
       .eq("season_type", seasonType)
       .order("team_abbr")
       .order("week")
+      .order("gsis_id")
       .range(from, from + PAGE - 1);
-    if (team) {
-      const aliases: Record<string, string[]> = {
-        LAR: ["LAR", "LA"],
-        LA: ["LA", "LAR"],
-        ARI: ["ARI", "AZ"],
-        AZ: ["AZ", "ARI"],
-        WAS: ["WAS", "WSH"],
-        WSH: ["WSH", "WAS"],
-      };
-      const abbrs = aliases[team.toUpperCase()] ?? [team];
-      q = q.in("team_abbr", abbrs);
-    }
-    const { data, error } = await q;
+    if (team) q = q.in("team_abbr", TEAM_ALIASES[team] ?? [team]);
+    return q;
+  };
+
+  const first = await pageQuery(0, true);
+  if (first.error) throw first.error;
+  const rows = (first.data ?? []) as PlayerWeekUsage[];
+  const total = Math.min(first.count ?? rows.length, MAX_ROWS);
+
+  const rest = [];
+  for (let from = PAGE; from < total; from += PAGE) rest.push(pageQuery(from, false));
+  for (const { data, error } of await Promise.all(rest)) {
     if (error) throw error;
-    const batch = (data ?? []) as PlayerWeekUsage[];
-    rows.push(...batch);
-    if (batch.length < PAGE) break;
+    rows.push(...((data ?? []) as PlayerWeekUsage[]));
   }
   return rows;
 }
 
-export async function fetchUsageMeta(): Promise<{
+export function fetchUsageMeta() {
+  return cachedUsage("meta", loadUsageMeta);
+}
+
+async function loadUsageMeta(): Promise<{
   seasons: number[];
   latest: { season: number; seasonType: UsageSeasonType; week: number } | null;
 }> {

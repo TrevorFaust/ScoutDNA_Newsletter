@@ -38,34 +38,38 @@ function toArchiveEntry(row: SectionRow, includeDrafts: boolean): TeamArchiveEnt
 
 export default async function TeamArchivePage({ params }: Props) {
   const { slug } = await params;
-  const viewer = await getViewer();
-  const includeDrafts = Boolean(viewer?.isAdmin);
   const team = (teamsData as TeamMeta[]).find((t) => t.slug === slug);
   const supabase = createServerClient();
 
-  const { data: teamRow } = await supabase
-    .from("newsletter_teams")
-    .select("id")
-    .eq("slug", slug)
-    .maybeSingle();
+  const loadSections = async () => {
+    const { data: teamRow } = await supabase
+      .from("newsletter_teams")
+      .select("id")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (!teamRow) return [];
+    const { data } = await supabase
+      .from("newsletter_sections")
+      .select(
+        `intro_paragraphs, rookie_paragraph, activity_markdown, talk_markdown, fantasy_markdown,
+         footnotes, tags, flags, is_empty, empty_reason,
+         newsletter_issues(issue_date, slug, title, status, issue_type, published_at)`
+      )
+      .eq("team_id", teamRow.id)
+      .order("issue_date", { foreignTable: "newsletter_issues", ascending: false })
+      .limit(120);
+    return data ?? [];
+  };
 
-  const { data: sections } = teamRow
-    ? await supabase
-        .from("newsletter_sections")
-        .select(
-          `intro_paragraphs, rookie_paragraph, activity_markdown, talk_markdown, fantasy_markdown,
-           footnotes, tags, flags, is_empty, empty_reason,
-           newsletter_issues(issue_date, slug, title, status, issue_type, published_at)`
-        )
-        .eq("team_id", teamRow.id)
-        .order("issue_date", { foreignTable: "newsletter_issues", ascending: false })
-        .limit(120)
-    : { data: [] };
-
-  const playerLookup = await fetchPlayerPositionLookup(supabase);
+  const [viewer, sections, playerLookup] = await Promise.all([
+    getViewer(),
+    loadSections(),
+    fetchPlayerPositionLookup(supabase),
+  ]);
+  const includeDrafts = Boolean(viewer?.isAdmin);
   const playerEntries = serializePlayerLookup(playerLookup);
 
-  const entries = (sections ?? [])
+  const entries = sections
     .map((s) => toArchiveEntry(s as SectionRow, includeDrafts))
     .filter((e): e is TeamArchiveEntry => e !== null)
     .sort((a, b) => b.issue.issue_date.localeCompare(a.issue.issue_date));

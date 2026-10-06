@@ -13,6 +13,8 @@ export type IssueSummary = {
   status: string;
   issue_type: "daily" | "weekly";
   published_at: string | null;
+  hook?: string | null;
+  deck?: string | null;
 };
 
 export async function fetchIssues(
@@ -22,7 +24,7 @@ export async function fetchIssues(
   const supabase = createServerClient();
   let query = supabase
     .from("newsletter_issues")
-    .select("issue_date, slug, title, status, issue_type, published_at")
+    .select("issue_date, slug, title, status, issue_type, published_at, hook, deck")
     .order("issue_date", { ascending: false });
 
   if (issueType) {
@@ -40,7 +42,7 @@ export async function fetchLatestIssue(issueType?: "daily" | "weekly", published
   const supabase = createServerClient();
   let query = supabase
     .from("newsletter_issues")
-    .select("issue_date, slug, title, status, issue_type, published_at")
+    .select("issue_date, slug, title, status, issue_type, published_at, hook, deck")
     .order("issue_date", { ascending: false })
     .limit(1);
 
@@ -139,26 +141,30 @@ export async function fetchWeeklyReel(opts: {
   const supabase = createServerClient();
   let query = supabase
     .from("newsletter_issues")
-    .select("id, issue_date, slug, title, status, issue_type, published_at, league_section")
+    .select("id, issue_date, slug, title, status, issue_type, published_at, hook, deck, league_section")
     .eq("issue_type", "weekly")
     .order("issue_date", { ascending: false });
   if (!opts.includeDrafts) {
     query = query.eq("status", "published");
   }
-  const { data, error } = await query;
-  const issues = (data ?? []) as WeeklyIssueRow[];
-
   const team = opts.teamSlug
     ? getTeams().find((t) => t.slug === opts.teamSlug)
     : undefined;
+  const [{ data, error }, teamRow] = await Promise.all([
+    query,
+    team
+      ? supabase
+          .from("newsletter_teams")
+          .select("id")
+          .eq("slug", team.slug)
+          .maybeSingle()
+          .then(({ data: row }) => row)
+      : null,
+  ]);
+  const issues = (data ?? []) as WeeklyIssueRow[];
   const previewByIssue = new Map<string, string>();
 
   if (team && issues.length > 0) {
-    const { data: teamRow } = await supabase
-      .from("newsletter_teams")
-      .select("id")
-      .eq("slug", team.slug)
-      .maybeSingle();
     if (teamRow?.id) {
       const { data: sections } = await supabase
         .from("newsletter_sections")

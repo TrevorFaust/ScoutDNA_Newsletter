@@ -5,10 +5,12 @@ import {
   applyRumorFootnoteEdits,
   cleanRumorLabel,
   dropRumorFootnotes,
+  replaceRumorSentences,
   rumorFootnoteLines,
   stripReviewMetaFromTalk,
   stripRumorFromTalk,
   usableRumorMarkdown,
+  weeklyRumorSentences,
   type RumorFootnote,
 } from "@/lib/rumorTalk";
 
@@ -181,6 +183,19 @@ export async function POST(req: NextRequest) {
   const bodySource = usableRumorMarkdown(activity, talk);
   const citedIn = [intro, fantasy, bodySource].filter(Boolean).join("\n");
   let markdown = bodySource;
+  // Weekly recaps keep the rumor in intro/fantasy prose (Activity is empty).
+  const proseRumors = bodySource ? [] : weeklyRumorSentences(intro, fantasy);
+  const proseEdits: { intro_paragraphs?: string; fantasy_markdown?: string } = {};
+  const applyProse = (replacement: string) => {
+    const introHit = replaceRumorSentences(intro, proseRumors, replacement);
+    if (introHit.replaced) proseEdits.intro_paragraphs = introHit.markdown;
+    const fantasyHit = replaceRumorSentences(
+      fantasy,
+      proseRumors,
+      introHit.replaced ? "" : replacement
+    );
+    if (fantasyHit.replaced) proseEdits.fantasy_markdown = fantasyHit.markdown;
+  };
 
   if (action === "approve") {
     flags.push("rumor:approved");
@@ -214,6 +229,7 @@ export async function POST(req: NextRequest) {
 
     if (resolution === "remove") {
       if (bodySource) markdown = stripRumorFromTalk(bodySource);
+      else if (proseRumors.length) applyProse("");
       footnotes = dropRumorFootnotes(footnotes, citedIn).map((fn) => ({
         ...fn,
         label: cleanRumorLabel(fn.label),
@@ -222,7 +238,19 @@ export async function POST(req: NextRequest) {
       if (bodySource) {
         markdown = talkOverride as string;
       } else {
-        footnotes = applyRumorFootnoteEdits(footnotes, talkOverride as string, citedIn);
+        const edited = String(talkOverride);
+        const noteEdits = edited
+          .split("\n")
+          .filter((line) => /^\s*\d+\.\s+/.test(line))
+          .join("\n");
+        const prose = edited
+          .split("\n")
+          .filter((line) => !/^\s*\d+\.\s+/.test(line))
+          .join(" ")
+          .replace(/\s{2,}/g, " ")
+          .trim();
+        if (proseRumors.length) applyProse(prose);
+        footnotes = applyRumorFootnoteEdits(footnotes, noteEdits, citedIn);
       }
     } else if (resolution === "rewrite") {
       if (bodySource) {
@@ -280,10 +308,13 @@ export async function POST(req: NextRequest) {
     talk_markdown: string;
     footnotes: RumorFootnote[];
     activity_markdown?: string | null;
+    intro_paragraphs?: string;
+    fantasy_markdown?: string;
   } = {
     flags,
     talk_markdown: "",
     footnotes,
+    ...proseEdits,
   };
   if (bodySource) {
     updatePayload.activity_markdown = markdown || null;

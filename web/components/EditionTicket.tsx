@@ -16,12 +16,12 @@ function reelStatus(status: string) {
 }
 
 function StubWeek({ tabLabel }: { tabLabel: string }) {
-  const week = /^Week (\d+)$/.exec(tabLabel);
+  const week = /^(?:(Preseason|Camp) )?Week (\d+)$/.exec(tabLabel);
   if (week) {
     return (
       <span className="ticket-stub-week">
-        <small>Week</small>
-        <strong>{week[1]}</strong>
+        <small>{week[1] ?? "Week"}</small>
+        <strong>{week[2]}</strong>
       </span>
     );
   }
@@ -51,7 +51,12 @@ export function EditionTicket({ item, isAdmin = false, focusable = true }: Props
           <p className="weekly-reel-status">{reelStatus(item.status)}</p>
         ) : null}
         <div className="ticket-actions">
-          <Link href={item.href} className="btn btn-primary ticket-read" tabIndex={tabIndex}>
+          <Link
+            href={item.href}
+            className="btn btn-primary ticket-read"
+            tabIndex={tabIndex}
+            draggable={false}
+          >
             Read {item.label}
           </Link>
           {showStatus ? (

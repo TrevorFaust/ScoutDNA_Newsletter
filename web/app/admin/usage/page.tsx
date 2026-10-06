@@ -1,9 +1,11 @@
+import Link from "next/link";
+import { PageMasthead } from "@/components/PageMasthead";
 import { UsageBoard } from "@/components/UsageBoard";
 import { UsageFilters } from "@/components/UsageFilters";
-import { getViewer } from "@/lib/auth";
 import {
   loadUsagePage,
   fetchUsageMeta,
+  prefetchUsageRows,
   USAGE_TYPES,
   type UsageSeasonType,
 } from "@/lib/playerUsage";
@@ -50,7 +52,15 @@ export default async function UsageAdminPage({
   }>;
 }) {
   const params = await searchParams;
-  const viewer = await getViewer();
+  const team = params.team?.toUpperCase() || null;
+  const explicitType = USAGE_TYPES.includes(params.season_type as UsageSeasonType)
+    ? (params.season_type as UsageSeasonType)
+    : null;
+  const explicitSeason = Number(params.season) || null;
+  if (explicitSeason && explicitType) {
+    prefetchUsageRows(explicitSeason, explicitType, team);
+  }
+
   let loadError: string | null = null;
   let meta: Awaited<ReturnType<typeof fetchUsageMeta>> | null = null;
   try {
@@ -60,19 +70,14 @@ export default async function UsageAdminPage({
   }
 
   const latest = meta?.latest;
-  const season = Number(params.season) || latest?.season || 2026;
-  const seasonType = (
-    USAGE_TYPES.includes(params.season_type as UsageSeasonType)
-      ? params.season_type
-      : latest?.seasonType || "REG"
-  ) as UsageSeasonType;
+  const season = explicitSeason || latest?.season || 2026;
+  const seasonType = explicitType ?? latest?.seasonType ?? "REG";
   const weekParam =
     params.week === "all"
       ? ("all" as const)
       : params.week
         ? Number(params.week)
         : (latest?.week ?? null);
-  const team = params.team?.toUpperCase() || null;
   const scoring = parseScoring(params.scoring);
   const teams = getTeams();
   const gamesPromise = fetchTeamGames(season, seasonType).catch(
@@ -102,18 +107,23 @@ export default async function UsageAdminPage({
 
   return (
     <main className="camp-admin usage-admin">
-      <header className="camp-admin-header usage-header">
-        <div>
-          <p className="camp-admin-eyebrow">{viewer?.isAdmin ? "Editor" : "Usage"}</p>
-          <h1>Skill usage</h1>
-          <p className="camp-admin-lead">
-            Box scores tell you who scored, usage tells you who is about to.
-            Check how your guys are really being deployed, catch the backup
-            quietly eating into a starter&apos;s snaps, and find the receiver
-            drawing targets his stat line hasn&apos;t caught up to yet.
-          </p>
-        </div>
-      </header>
+      <nav className="breadcrumb" aria-label="Breadcrumb">
+        <Link href="/">Home</Link>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">Usage</span>
+      </nav>
+
+      <PageMasthead
+        eyebrow="Weekly stat lines"
+        title="Skill usage"
+      >
+        <p className="masthead-lead">
+          Box scores tell you who scored, usage tells you who is about to.
+          Check how your guys are really being deployed, catch the backup
+          quietly eating into a starter&apos;s snaps, and find the receiver
+          drawing targets his stat line hasn&apos;t caught up to yet.
+        </p>
+      </PageMasthead>
 
       {loadError && (
         <p className="alert">
