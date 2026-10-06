@@ -94,7 +94,6 @@ export default async function IssuePage({ params, searchParams }: Props) {
       issueId={issue.id}
       issueType={issue.issue_type as "daily" | "weekly"}
       issueDate={date}
-      edition={{ hook: issue.hook, deck: issue.deck, storylines: issue.storylines }}
       leagueSection={issue.league_section}
       leagueFootnotes={
         (issue.league_footnotes as { n: number; label: string; url: string }[]) ??

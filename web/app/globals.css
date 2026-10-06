@@ -1836,43 +1836,6 @@ button.team-link:disabled {
   font-size: clamp(1.5rem, 3.5vw, 2rem);
 }
 
-.issue-hook {
-  margin: 0.45rem 0 0;
-  color: var(--muted);
-  font-size: 1.05rem;
-}
-
-.issue-deck {
-  margin: 0.5rem 0 0;
-  max-width: 62ch;
-  line-height: 1.55;
-}
-
-.issue-storylines {
-  margin-top: 0.9rem;
-  max-width: 62ch;
-}
-
-.issue-storylines-label {
-  display: block;
-  margin-bottom: 0.35rem;
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.issue-storylines ul {
-  margin: 0;
-  padding-left: 1.1rem;
-  line-height: 1.5;
-}
-
-.issue-storylines li + li {
-  margin-top: 0.2rem;
-}
-
 .issue-header-actions {
   display: flex;
   flex-wrap: wrap;
