@@ -1,5 +1,8 @@
 name: Daily pipeline
 
+permissions:
+  contents: write
+
 on:
   schedule:
     # 1:00 AM Pacific (issue date = yesterday PT). 08:00 UTC = PDT; use 09:00 UTC Nov-Mar (PST).
@@ -75,12 +78,14 @@ jobs:
           REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
           REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
           REDDIT_USER_AGENT: ${{ secrets.REDDIT_USER_AGENT }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           NEWSLETTER_TIMEZONE: America/Los_Angeles
         run: |
           echo "Issue date: ${{ steps.mode.outputs.issue_date }} extra=${{ steps.mode.outputs.extra_date }} (compose=${{ steps.mode.outputs.compose }})"
-          cd pipeline && python -m src.run_collect --date "${{ steps.mode.outputs.issue_date }}"
+          cd pipeline
+          python -m src.run_with_recovery --label "collect ${{ steps.mode.outputs.issue_date }}" -- python -m src.run_collect --date "${{ steps.mode.outputs.issue_date }}"
           if [ -n "${{ steps.mode.outputs.extra_date }}" ]; then
-            python -m src.run_collect --date "${{ steps.mode.outputs.extra_date }}"
+            python -m src.run_with_recovery --label "collect ${{ steps.mode.outputs.extra_date }}" -- python -m src.run_collect --date "${{ steps.mode.outputs.extra_date }}"
           fi
       - name: Media batch (YouTube + podcasts)
         if: github.event.inputs.skip_media != 'true'
@@ -88,11 +93,13 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           NEWSLETTER_TIMEZONE: America/Los_Angeles
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           YOUTUBE_SKIP_WHISPER: "true"
         run: |
-          cd pipeline && python -m src.run_media_batch --date "${{ steps.mode.outputs.issue_date }}" --all-teams --workers 6 --max-videos 2 --max-episodes 2
+          cd pipeline
+          python -m src.run_with_recovery --label "media ${{ steps.mode.outputs.issue_date }}" -- python -m src.run_media_batch --date "${{ steps.mode.outputs.issue_date }}" --all-teams --workers 6 --max-videos 2 --max-episodes 2
           if [ -n "${{ steps.mode.outputs.extra_date }}" ]; then
-            python -m src.run_media_batch --date "${{ steps.mode.outputs.extra_date }}" --all-teams --workers 6 --max-videos 2 --max-episodes 2
+            python -m src.run_with_recovery --label "media ${{ steps.mode.outputs.extra_date }}" -- python -m src.run_media_batch --date "${{ steps.mode.outputs.extra_date }}" --all-teams --workers 6 --max-videos 2 --max-episodes 2
           fi
       - name: Camp signals (extract + aggregate + propose)
         env:
@@ -101,9 +108,10 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           NEWSLETTER_TIMEZONE: America/Los_Angeles
         run: |
-          cd pipeline && python -m src.run_extract_camp_signals --date "${{ steps.mode.outputs.issue_date }}"
+          cd pipeline
+          python -m src.run_with_recovery --label "camp signals ${{ steps.mode.outputs.issue_date }}" -- python -m src.run_extract_camp_signals --date "${{ steps.mode.outputs.issue_date }}"
           if [ -n "${{ steps.mode.outputs.extra_date }}" ]; then
-            python -m src.run_extract_camp_signals --date "${{ steps.mode.outputs.extra_date }}"
+            python -m src.run_with_recovery --label "camp signals ${{ steps.mode.outputs.extra_date }}" -- python -m src.run_extract_camp_signals --date "${{ steps.mode.outputs.extra_date }}"
           fi
       - name: Compose weekly (manual backfill only)
         if: github.event.inputs.skip_compose != 'true' && steps.mode.outputs.compose == 'weekly'
@@ -113,7 +121,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           NEWSLETTER_TIMEZONE: America/Los_Angeles
         run: |
-          cd pipeline && python -m src.run_compose_weekly --date "${{ steps.mode.outputs.issue_date }}" --force
+          cd pipeline && python -m src.run_with_recovery --label "weekly compose" -- python -m src.run_compose_weekly --date "${{ steps.mode.outputs.issue_date }}" --force
       - name: Compose daily (all 32 teams -> in_review)
         if: github.event.inputs.skip_compose != 'true' && steps.mode.outputs.compose == 'daily'
         env:
@@ -122,4 +130,4 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           NEWSLETTER_TIMEZONE: America/Los_Angeles
         run: |
-          cd pipeline && python -m src.run_compose --date "${{ steps.mode.outputs.issue_date }}"
+          cd pipeline && python -m src.run_with_recovery --label "daily compose" -- python -m src.run_compose --date "${{ steps.mode.outputs.issue_date }}"

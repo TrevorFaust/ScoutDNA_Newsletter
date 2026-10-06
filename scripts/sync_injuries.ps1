@@ -13,7 +13,7 @@ if (-not (Test-Path $VenvPython)) {
 
 Push-Location $Pipeline
 try {
-    & $VenvPython -m src.sync_espn_injuries
+    & $VenvPython -m src.run_with_recovery --label "injury sync" -- $VenvPython -m src.sync_espn_injuries
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } finally {
     Pop-Location

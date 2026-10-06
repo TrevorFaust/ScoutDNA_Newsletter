@@ -30,7 +30,7 @@ try {
     if ($Team) { $args += @("--team", $Team) }
     if ($SkipExtract) { $args += "--skip-extract" }
     if ($SkipPropose) { $args += "--skip-propose" }
-    & $VenvPython @args
+    & $VenvPython -m src.run_with_recovery --label "camp signals" -- $VenvPython @args
 } finally {
     Pop-Location
 }

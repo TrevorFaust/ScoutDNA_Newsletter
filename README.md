@@ -164,6 +164,8 @@ Logs: `logs/daily_collect_YYYY-MM-DD.log`. Manual run: `.\scripts\daily_collect.
 
 **GitHub Actions** backup (when this PC is off): `.github/workflows/collect.yml` collects daily (including Sundays), extracts camp signals, and refreshes the battle proposal queue. `.github/workflows/sync_nflverse.yml` syncs boxes at 3am PT and composes weekly on Tuesday. Pass `force_daily_compose: true` on a manual collect `workflow_dispatch` to get a full daily edition on any date. Secrets: `SUPABASE_*`, `REDDIT_USER_AGENT`, `ANTHROPIC_API_KEY`.
 
+If collect or compose errors, the job tries to repair that failure and run it again. A failure email goes out only after three attempts in a row. A later morning check (`.github/workflows/recover_missed.yml`) starts the job if the schedule never fired.
+
 Daily nflverse sync is its own Action: `.github/workflows/sync_nflverse.yml`.
 
 ## Repo layout

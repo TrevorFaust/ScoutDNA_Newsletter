@@ -48,7 +48,7 @@ try {
 
     if ($PodcastsOnly) { $args += "--podcasts-only" }
 
-    & $VenvPython @args
+    & $VenvPython -m src.run_with_recovery --label "media" -- $VenvPython @args
 
 } finally {
 

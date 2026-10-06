@@ -23,7 +23,7 @@ try {
     if ($CoachingOnly) { $pyArgs += "--coaching-only" }
     if ($DraftOnly) { $pyArgs += "--draft-only" }
     if ($UsageOnly) { $pyArgs += "--usage-only" }
-    & $VenvPython @pyArgs
+    & $VenvPython -m src.run_with_recovery --label "nflverse sync" -- $VenvPython @pyArgs
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } finally {
     Pop-Location

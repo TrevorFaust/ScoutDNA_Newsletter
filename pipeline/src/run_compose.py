@@ -1,8 +1,12 @@
 """Cluster items and compose newsletter draft via Claude."""
 import argparse
+import os
 from datetime import date, datetime, timedelta
 
+import anthropic
+
 from .compose import compose_issue, compose_league_section, compose_team_section
+from .recovery import ATTEMPTS, exhausted_message, leak_hits, scrub_section, split_leak_hits
 from .config import TZ
 from .db import get_client
 from .dedupe import cluster_items
@@ -22,6 +26,87 @@ from .teams import load_teams
 
 def default_issue_date() -> date:
     return datetime.now(TZ).date()
+
+
+def _replace_team_section(sections: list[dict], slug: str, new_section: dict) -> None:
+    for index, sec in enumerate(sections):
+        if sec.get("team_slug") != slug:
+            continue
+        new_section["sort_order"] = sec.get("sort_order")
+        new_section["team_slug"] = slug
+        sections[index] = new_section
+        return
+
+
+def _repair_daily_leaks(
+    client: anthropic.Anthropic,
+    teams: list,
+    sections: list[dict],
+    league_text: str,
+    league_footnotes: list,
+    clusters_by_slug: dict[str, list[dict]],
+    league_clusters: list[dict],
+    issue_date: date,
+    prior_context: str,
+) -> tuple[str, list]:
+    """Recompose only the daily sections that still contain internal field names."""
+    from .compose import scrub_internal_flag_names
+
+    errors: list[str] = []
+    for attempt in range(1, ATTEMPTS + 1):
+        for sec in sections:
+            scrub_section(sec)
+        league_text = scrub_internal_flag_names(league_text)
+        hits = leak_hits(sections, league_text)
+        if not hits:
+            return league_text, league_footnotes
+        summary = ", ".join(hits[:20])
+        errors.append(summary)
+        print(
+            f"[recover] daily compose attempt {attempt}/{ATTEMPTS} still has leaked tokens: {summary}",
+            flush=True,
+        )
+        if attempt == ATTEMPTS:
+            raise RuntimeError(exhausted_message("daily compose", errors))
+        by_slug, league_tokens = split_leak_hits(hits)
+        team_by_slug = {team.slug: team for team in teams}
+        for slug, tokens in by_slug.items():
+            team = team_by_slug.get(slug)
+            if team is None:
+                continue
+            print(
+                f"[recover] recomposing {slug} without {', '.join(sorted(tokens))}",
+                flush=True,
+            )
+            section = compose_team_section(
+                client,
+                team,
+                clusters_by_slug.get(slug, []),
+                issue_date,
+                prior_context=prior_context,
+                forbid_tokens=sorted(tokens),
+            )
+            section["sort_order"] = next(
+                (sec.get("sort_order") for sec in sections if sec.get("team_slug") == slug),
+                section.get("sort_order"),
+            )
+            _replace_team_section(sections, slug, section)
+        if league_tokens:
+            print(
+                "[recover] recomposing league section without "
+                + ", ".join(sorted(league_tokens)),
+                flush=True,
+            )
+            league = compose_league_section(
+                client,
+                league_clusters,
+                issue_date,
+                prior_context=prior_context,
+                forbid_tokens=sorted(league_tokens),
+            )
+            league_text = league["body"]
+            league_footnotes = league.get("footnotes") or []
+    raise RuntimeError(exhausted_message("daily compose", errors))
 
 
 def main() -> None:
@@ -78,11 +163,11 @@ def main() -> None:
     league_clusters = cluster_league_feed(extract_league_feed_items(normalized))
 
     try:
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise RuntimeError("ANTHROPIC_API_KEY required for compose")
+        client = anthropic.Anthropic(api_key=api_key)
         if compose_slugs:
-            import os
-            import anthropic
-
-            client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
             league = compose_league_section(
                 client, league_clusters, issue_date, prior_context=prior_context
             )
@@ -125,6 +210,18 @@ def main() -> None:
             )
             league_text = league["body"]
             league_footnotes = league.get("footnotes") or []
+
+        league_text, league_footnotes = _repair_daily_leaks(
+            client,
+            teams,
+            sections,
+            league_text,
+            league_footnotes,
+            by_slug,
+            league_clusters,
+            issue_date,
+            prior_context,
+        )
 
         issue = ensure_issue(issue_date, "daily")
         issue_id = issue["id"]

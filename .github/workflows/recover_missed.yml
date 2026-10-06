@@ -1,0 +1,41 @@
+name: Recover missed runs
+
+permissions:
+  actions: write
+  contents: read
+
+on:
+  schedule:
+    # 7:00 AM Pacific. 14:00 UTC is 7am PDT and 6am PST, after the 1am collect and 3am Tuesday compose.
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restart collect or Tuesday compose if today's job never started
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TODAY=$(date -u +%Y-%m-%d)
+          DOW=$(TZ=America/Los_Angeles date +%u)
+
+          pipeline_runs=$(gh run list --workflow collect.yml --created "$TODAY" --limit 20 --json databaseId --jq 'length')
+          if [ "$pipeline_runs" = "0" ]; then
+            echo "Daily pipeline never started for $TODAY. Dispatching."
+            gh workflow run collect.yml --ref "${{ github.ref_name }}"
+          else
+            echo "Daily pipeline already has $pipeline_runs run(s) today. Leaving it alone."
+          fi
+
+          if [ "$DOW" = "2" ]; then
+            sync_runs=$(gh run list --workflow sync_nflverse.yml --created "$TODAY" --limit 20 --json databaseId --jq 'length')
+            if [ "$sync_runs" = "0" ]; then
+              echo "Tuesday sync and compose never started. Dispatching."
+              gh workflow run sync_nflverse.yml --ref "${{ github.ref_name }}"
+            else
+              echo "Sync workflow already has $sync_runs run(s) today. Leaving it alone."
+            fi
+          fi

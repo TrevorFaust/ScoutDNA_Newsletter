@@ -1,5 +1,8 @@
 name: Daily nflverse sync
 
+permissions:
+  contents: write
+
 on:
   schedule:
     # 3:00 AM Pacific ≈ 10:00 UTC (PDT). Syncs boxes, then Tuesday composes the weekly recap.
@@ -18,7 +21,7 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -45,14 +48,16 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: cd pipeline && python -m src.run_sync_nflverse
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: cd pipeline && python -m src.run_with_recovery --label "nflverse sync" -- python -m src.run_sync_nflverse
       - name: Sync ESPN injury board
         if: github.event.inputs.skip_compose != 'true' && steps.weekly.outputs.compose == 'weekly'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           NEWSLETTER_TIMEZONE: America/Los_Angeles
-        run: cd pipeline && python -m src.sync_espn_injuries
+        run: cd pipeline && python -m src.run_with_recovery --label "injury sync" -- python -m src.sync_espn_injuries
       - name: Compose weekly (Tuesday week recap)
         if: github.event.inputs.skip_compose != 'true' && steps.weekly.outputs.compose == 'weekly'
         env:
@@ -61,8 +66,9 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           NEWSLETTER_TIMEZONE: America/Los_Angeles
         run: |
-          FORCE_FLAG=""
+          cd pipeline
+          args=(python -m src.run_compose_weekly --date "${{ steps.weekly.outputs.issue_date }}")
           if [ "${{ github.event.inputs.force_weekly_compose }}" = "true" ]; then
-            FORCE_FLAG="--force"
+            args+=(--force)
           fi
-          cd pipeline && python -m src.run_compose_weekly --date "${{ steps.weekly.outputs.issue_date }}" $FORCE_FLAG
+          python -m src.run_with_recovery --label "weekly compose" -- "${args[@]}"

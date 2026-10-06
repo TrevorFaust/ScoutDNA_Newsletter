@@ -64,6 +64,8 @@ def main() -> None:
 
     log_pipeline_run("collect", issue_date, "started")
     items: list[dict] = []
+    reddit_error: Exception | None = None
+    rss_error: Exception | None = None
 
     if skip_reddit:
         print("Reddit skipped (RSS + media only for this run).")
@@ -72,6 +74,7 @@ def main() -> None:
             reddit_items = collect_reddit(teams, content_date)
             items.extend(reddit_items)
         except Exception as e:
+            reddit_error = e
             log_pipeline_run("collect", issue_date, "partial", error_message=f"reddit: {e}")
             print(f"Reddit failed: {e}")
 
@@ -81,7 +84,13 @@ def main() -> None:
         if rss_items:
             print(f"ESPN RSS: {len(rss_items)} items")
     except Exception as e:
+        rss_error = e
         print(f"RSS failed: {e}")
+
+    if rss_error and (reddit_error or skip_reddit):
+        raise RuntimeError(
+            f"Reddit and RSS both failed: reddit: {reddit_error or 'skipped'}; rss: {rss_error}"
+        )
 
     if args.team:
         try:

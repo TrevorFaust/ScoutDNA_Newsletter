@@ -7,9 +7,16 @@ import anthropic
 
 from .compose import (
     compose_issue_weekly,
+    compose_league_section_weekly,
     compose_team_section_weekly,
-    find_internal_flag_leaks,
     scrub_internal_flag_names,
+)
+from .recovery import (
+    ATTEMPTS,
+    exhausted_message,
+    leak_hits,
+    scrub_section,
+    split_leak_hits,
 )
 from .config import TZ
 from .db import get_client
@@ -23,7 +30,7 @@ from .storage import (
 )
 from .tables import ISSUES
 from .teams import division_groups, load_teams
-from .weekly_input import build_team_weekly_input
+from .weekly_input import build_league_weekly_input, build_team_weekly_input
 from .weekly_window import (
     content_dates_for_week,
     daily_issue_dates_for_week,
@@ -33,6 +40,91 @@ from .weekly_window import (
 
 def default_weekly_issue_date() -> date:
     return datetime.now(TZ).date()
+
+
+def _replace_team_section(
+    sections: list[dict],
+    slug: str,
+    new_section: dict,
+) -> None:
+    for index, sec in enumerate(sections):
+        if sec.get("team_slug") != slug:
+            continue
+        new_section["sort_order"] = sec.get("sort_order")
+        new_section["team_slug"] = slug
+        sections[index] = new_section
+        return
+    new_section["team_slug"] = slug
+    sections.append(new_section)
+
+
+def _repair_weekly_leaks(
+    client: anthropic.Anthropic,
+    teams: list,
+    sections: list[dict],
+    league_text: str | None,
+    league_footnotes: list | None,
+    issue_date: date,
+    slug_to_id: dict[str, str],
+    prior_context: str,
+    *,
+    allow_league: bool,
+) -> tuple[str | None, list | None]:
+    """Recompose only the sections that still contain internal field names."""
+    errors: list[str] = []
+    for attempt in range(1, ATTEMPTS + 1):
+        for sec in sections:
+            scrub_section(sec)
+        if league_text:
+            league_text = scrub_internal_flag_names(league_text)
+        hits = leak_hits(sections, league_text if allow_league else None)
+        if not hits:
+            return league_text, league_footnotes
+        summary = ", ".join(hits[:20])
+        errors.append(summary)
+        print(
+            f"[recover] weekly compose attempt {attempt}/{ATTEMPTS} still has leaked tokens: {summary}",
+            flush=True,
+        )
+        if attempt == ATTEMPTS:
+            raise RuntimeError(exhausted_message("weekly compose", errors))
+        by_slug, league_tokens = split_leak_hits(hits)
+        team_by_slug = {team.slug: team for team in teams}
+        for slug, tokens in by_slug.items():
+            team = team_by_slug.get(slug)
+            if team is None:
+                continue
+            print(
+                f"[recover] recomposing {slug} without {', '.join(sorted(tokens))}",
+                flush=True,
+            )
+            team_input = build_team_weekly_input(team, issue_date, teams, slug_to_id)
+            section = compose_team_section_weekly(
+                client,
+                team,
+                team_input,
+                issue_date,
+                prior_context=prior_context,
+                forbid_tokens=sorted(tokens),
+            )
+            _replace_team_section(sections, slug, section)
+        if allow_league and league_tokens:
+            print(
+                "[recover] recomposing league section without "
+                + ", ".join(sorted(league_tokens)),
+                flush=True,
+            )
+            league_input = build_league_weekly_input(issue_date, slug_to_id)
+            league = compose_league_section_weekly(
+                client,
+                league_input,
+                issue_date,
+                prior_context=prior_context,
+                forbid_tokens=sorted(league_tokens),
+            )
+            league_text = league["body"]
+            league_footnotes = league.get("footnotes") or []
+    raise RuntimeError(exhausted_message("weekly compose", errors))
 
 
 def main() -> None:
@@ -97,11 +189,12 @@ def main() -> None:
         issue_id = issue["id"]
         sb = get_client()
 
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise RuntimeError("ANTHROPIC_API_KEY required for compose")
+        client = anthropic.Anthropic(api_key=api_key)
+
         if compose_slugs:
-            api_key = os.getenv("ANTHROPIC_API_KEY")
-            if not api_key:
-                raise RuntimeError("ANTHROPIC_API_KEY required for compose")
-            client = anthropic.Anthropic(api_key=api_key)
             sections = []
             sort = 0
             for _div, div_teams in division_groups(teams).items():
@@ -134,6 +227,18 @@ def main() -> None:
             league_text = league["body"]
             league_footnotes = league.get("footnotes") or []
 
+        league_text, league_footnotes = _repair_weekly_leaks(
+            client,
+            teams,
+            sections,
+            league_text,
+            league_footnotes,
+            issue_date,
+            slug_to_id,
+            prior_context,
+            allow_league=league_text is not None,
+        )
+
         sb.table(ISSUES).update({"title": _issue_title(issue_date, "weekly")}).eq(
             "id", issue_id
         ).execute()
@@ -143,16 +248,6 @@ def main() -> None:
             team_id = slug_to_id.get(sec["team_slug"])
             if not team_id:
                 continue
-            # Final pass: scrub snake_case flag leaks before review.
-            for key in (
-                "intro_paragraphs",
-                "rookie_paragraph",
-                "activity_markdown",
-                "fantasy_markdown",
-            ):
-                val = sec.get(key)
-                if isinstance(val, str) and val:
-                    sec[key] = scrub_internal_flag_names(val)
             sb_sections.append(
                 {
                     "team_id": team_id,
@@ -168,28 +263,6 @@ def main() -> None:
                     "empty_reason": sec.get("empty_reason"),
                     "sort_order": sec["sort_order"],
                 }
-            )
-
-        if league_text:
-            league_text = scrub_internal_flag_names(league_text)
-
-        leak_hits: list[str] = []
-        for sec in sb_sections:
-            abr = next(
-                (s for s, tid in slug_to_id.items() if tid == sec["team_id"]),
-                sec["team_id"],
-            )
-            for key in ("intro_paragraphs", "fantasy_markdown"):
-                val = sec.get(key) or ""
-                for tok in find_internal_flag_leaks(val):
-                    leak_hits.append(f"{abr}.{key}:{tok}")
-        if league_text:
-            for tok in find_internal_flag_leaks(league_text):
-                leak_hits.append(f"league:{tok}")
-        if leak_hits:
-            raise RuntimeError(
-                "Internal snake_case tokens leaked into weekly prose before review: "
-                + ", ".join(leak_hits[:20])
             )
 
         issue_update: dict = {"status": "in_review"}

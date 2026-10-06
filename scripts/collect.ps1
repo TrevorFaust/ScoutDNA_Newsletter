@@ -19,7 +19,7 @@ try {
     if ($Date) { $args += @("--date", $Date) }
     if ($Team) { $args += @("--team", $Team) }
     if ($SkipReddit) { $args += "--skip-reddit" }
-    & $VenvPython @args
+    & $VenvPython -m src.run_with_recovery --label "collect" -- $VenvPython @args
 } finally {
     Pop-Location
 }

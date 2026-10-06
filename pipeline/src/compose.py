@@ -64,6 +64,20 @@ _INTERNAL_FLAG_REPLACEMENTS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bfantasy_skill_depth\b", re.I), "fantasy depth chart"),
     (re.compile(r"\bskill_position_battles\b", re.I), "position battles"),
     (re.compile(r"\btarget_leader\b", re.I), "target leader"),
+    (re.compile(r"\bfantasy_status\b", re.I), "fantasy role"),
+    (re.compile(r"\binjury_status\b", re.I), "injury status"),
+    (re.compile(r"\bskill_usage\b", re.I), "usage line"),
+    (re.compile(r"\bgame_box\b", re.I), "box score"),
+    (re.compile(r"\btopic_clusters\b", re.I), "this week's reporting"),
+    (re.compile(r"\bstory_arcs\b", re.I), "the week's arc"),
+    (re.compile(r"\bplay_sit_payoffs\b", re.I), "the play/sit result"),
+    (re.compile(r"\bname_collisions\b", re.I), "same-name players"),
+    (re.compile(r"\bplayer_experience\b", re.I), "experience"),
+    (re.compile(r"\byears_exp\b", re.I), "experience"),
+    (re.compile(r"\breturn_date\b", re.I), "return date"),
+    (re.compile(r"\bday_count\b", re.I), "how often it was reported"),
+    (re.compile(r"\bsource_urls\b", re.I), "sources"),
+    (re.compile(r"\braw_titles\b", re.I), "headlines"),
 ]
 
 _SNAKE_LEAK_RE = re.compile(r"\b[a-z]+(?:_[a-z0-9]+)+\b")
@@ -445,6 +459,50 @@ Rules:
 """
 
 
+def _complete_text(client: anthropic.Anthropic, prompt: str, *, max_tokens: int, label: str) -> str:
+    from .recovery import run_attempts
+
+    def _call(_attempt: int) -> str:
+        msg = client.messages.create(
+            model=MODEL,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return msg.content[0].text
+
+    return run_attempts(label, _call)
+
+
+def _complete_json(
+    client: anthropic.Anthropic,
+    prompt: str,
+    *,
+    max_tokens: int,
+    label: str,
+    fallback: dict,
+) -> dict:
+    text = ""
+    for attempt in range(1, 4):
+        text = _complete_text(
+            client,
+            prompt,
+            max_tokens=max_tokens,
+            label=f"{label} request {attempt}",
+        )
+        try:
+            return parse_compose_json(text)
+        except json.JSONDecodeError as exc:
+            print(f"[recover] {label} JSON attempt {attempt}/3 failed: {exc}", flush=True)
+    fallback = dict(fallback)
+    flags = list(fallback.get("flags") or [])
+    if "parse:error" not in flags:
+        flags.append("parse:error")
+    fallback["flags"] = flags
+    if not fallback.get("empty_reason"):
+        fallback["empty_reason"] = "Compose response was not valid JSON after 3 attempts."
+    return fallback
+
+
 def compose_team_section_weekly(
     client: anthropic.Anthropic,
     team: Team,
@@ -452,6 +510,7 @@ def compose_team_section_weekly(
     issue_date: date,
     *,
     prior_context: str = "",
+    forbid_tokens: list[str] | None = None,
 ) -> dict:
     if not weekly_input.get("topic_clusters"):
         return normalize_composed_section_weekly(
@@ -469,37 +528,29 @@ def compose_team_section_weekly(
             }
         )
 
+    from .recovery import forbid_note
+
     prompt = _build_team_weekly_prompt(
         team, weekly_input, issue_date, prior_context
+    ) + forbid_note(forbid_tokens)
+    data = _complete_json(
+        client,
+        prompt,
+        max_tokens=TEAM_MAX_TOKENS,
+        label=f"{team.slug} weekly",
+        fallback={
+            "intro_paragraphs": None,
+            "rookie_paragraph": "",
+            "activity_markdown": "",
+            "talk_markdown": "",
+            "fantasy_markdown": "",
+            "footnotes": [],
+            "tags": ["needs-review", "Weekly"],
+            "flags": ["parse:error"],
+            "is_empty": False,
+            "empty_reason": "Compose response was not valid JSON after 3 attempts.",
+        },
     )
-    text = ""
-    data: dict | None = None
-    for attempt in range(2):
-        msg = client.messages.create(
-            model=MODEL,
-            max_tokens=TEAM_MAX_TOKENS,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        text = msg.content[0].text
-        try:
-            data = parse_compose_json(text)
-            break
-        except json.JSONDecodeError:
-            if attempt == 0:
-                continue
-            data = {
-                "intro_paragraphs": None,
-                "rookie_paragraph": "",
-                "activity_markdown": "",
-                "talk_markdown": "",
-                "fantasy_markdown": "",
-                "footnotes": [],
-                "tags": ["needs-review", "Weekly"],
-                "flags": ["parse:error"],
-                "is_empty": False,
-                "empty_reason": "Compose response was not valid JSON — re-run weekly compose.",
-            }
-    assert data is not None
     data.setdefault("is_empty", False)
     data.setdefault("flags", [])
     tags = list(data.get("tags") or [])
@@ -522,34 +573,30 @@ def compose_league_section_weekly(
     issue_date: date,
     *,
     prior_context: str = "",
+    forbid_tokens: list[str] | None = None,
 ) -> dict:
+    from .recovery import forbid_note
+
     empty_body = (
         "No league-wide headlines dominated the week. Team sections below recap "
         "the games, injuries, and roster moves for all 32 clubs."
     )
     if not league_input.get("topic_clusters"):
         return _sanitize_league(empty_body, [])
-    msg = client.messages.create(
-        model=MODEL,
+    prompt = _build_league_weekly_prompt(
+        league_input, issue_date, prior_context
+    ) + forbid_note(forbid_tokens)
+    data = _complete_json(
+        client,
+        prompt,
         max_tokens=800,
-        messages=[
-            {
-                "role": "user",
-                "content": _build_league_weekly_prompt(
-                    league_input, issue_date, prior_context
-                ),
-            }
-        ],
+        label="league weekly",
+        fallback={"body": empty_body, "footnotes": []},
     )
-    text = msg.content[0].text
-    try:
-        data = parse_compose_json(text)
-        return _sanitize_league(
-            (data.get("body") or empty_body).strip(),
-            data.get("footnotes") or [],
-        )
-    except json.JSONDecodeError:
-        return _sanitize_league(text.strip(), [])
+    return _sanitize_league(
+        (data.get("body") or empty_body).strip(),
+        data.get("footnotes") or [],
+    )
 
 
 def compose_issue_weekly(
@@ -599,6 +646,7 @@ def compose_team_section(
     issue_date: date,
     *,
     prior_context: str = "",
+    forbid_tokens: list[str] | None = None,
 ) -> dict:
     if not clusters:
         return normalize_composed_section(
@@ -616,18 +664,17 @@ def compose_team_section(
             }
         )
 
-    msg = client.messages.create(
-        model=MODEL,
-        max_tokens=TEAM_MAX_TOKENS,
-        messages=[
-            {"role": "user", "content": _build_team_prompt(team, clusters, issue_date, prior_context)}
-        ],
+    from .recovery import forbid_note
+
+    prompt = _build_team_prompt(team, clusters, issue_date, prior_context) + forbid_note(
+        forbid_tokens
     )
-    text = msg.content[0].text
-    try:
-        data = parse_compose_json(text)
-    except json.JSONDecodeError:
-        data = {
+    data = _complete_json(
+        client,
+        prompt,
+        max_tokens=TEAM_MAX_TOKENS,
+        label=f"{team.slug} daily",
+        fallback={
             "intro_paragraphs": None,
             "rookie_paragraph": "",
             "activity_markdown": "",
@@ -637,8 +684,9 @@ def compose_team_section(
             "tags": ["needs-review"],
             "flags": ["parse:error"],
             "is_empty": False,
-            "empty_reason": "Compose response was not valid JSON — re-run compose for this team.",
-        }
+            "empty_reason": "Compose response was not valid JSON after 3 attempts.",
+        },
+    )
     data.setdefault("is_empty", False)
     data.setdefault("flags", [])
     if (data.get("metadata") or {}).get("needs_review"):
@@ -652,29 +700,30 @@ def compose_league_section(
     issue_date: date,
     *,
     prior_context: str = "",
+    forbid_tokens: list[str] | None = None,
 ) -> dict:
+    from .recovery import forbid_note
+
     empty_body = (
         "No league-wide headlines in today's feed. Team sections below cover "
         "OTAs, depth charts, injuries, and roster moves for all 32 clubs."
     )
     if not league_clusters:
         return _sanitize_league(empty_body, [])
-    msg = client.messages.create(
-        model=MODEL,
-        max_tokens=600,
-        messages=[
-            {"role": "user", "content": _build_league_prompt(league_clusters, issue_date, prior_context)}
-        ],
+    prompt = _build_league_prompt(league_clusters, issue_date, prior_context) + forbid_note(
+        forbid_tokens
     )
-    text = msg.content[0].text
-    try:
-        data = parse_compose_json(text)
-        return _sanitize_league(
-            (data.get("body") or empty_body).strip(),
-            data.get("footnotes") or [],
-        )
-    except json.JSONDecodeError:
-        return _sanitize_league(text.strip(), [])
+    data = _complete_json(
+        client,
+        prompt,
+        max_tokens=600,
+        label="league daily",
+        fallback={"body": empty_body, "footnotes": []},
+    )
+    return _sanitize_league(
+        (data.get("body") or empty_body).strip(),
+        data.get("footnotes") or [],
+    )
 
 
 def compose_issue(

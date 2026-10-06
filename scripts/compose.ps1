@@ -31,7 +31,8 @@ try {
         if ($Date) { $pyArgs += @("--date", $Date) }
         if ($Team) { $pyArgs += @("--team", $Team) }
     }
-    & $VenvPython @pyArgs
+    $label = if ($Weekly) { "weekly compose" } else { "daily compose" }
+    & $VenvPython -m src.run_with_recovery --label $label -- $VenvPython @pyArgs
 } finally {
     Pop-Location
 }
