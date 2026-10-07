@@ -12,30 +12,47 @@ on:
 
 jobs:
   recover:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Restart collect or Tuesday compose if today's job never started
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          set -euo pipefail
-          TODAY=$(date -u +%Y-%m-%d)
-          DOW=$(TZ=America/Los_Angeles date +%u)
+          set -uo pipefail
 
-          pipeline_runs=$(gh run list --workflow collect.yml --created "$TODAY" --limit 20 --json databaseId --jq 'length')
-          if [ "$pipeline_runs" = "0" ]; then
-            echo "Daily pipeline never started for $TODAY. Dispatching."
-            gh workflow run collect.yml --ref "${{ github.ref_name }}"
-          else
-            echo "Daily pipeline already has $pipeline_runs run(s) today. Leaving it alone."
-          fi
+          run_check() {
+            TODAY=$(date -u +%Y-%m-%d) || return 1
+            DOW=$(TZ=America/Los_Angeles date +%u) || return 1
 
-          if [ "$DOW" = "2" ]; then
-            sync_runs=$(gh run list --workflow sync_nflverse.yml --created "$TODAY" --limit 20 --json databaseId --jq 'length')
-            if [ "$sync_runs" = "0" ]; then
-              echo "Tuesday sync and compose never started. Dispatching."
-              gh workflow run sync_nflverse.yml --ref "${{ github.ref_name }}"
+            pipeline_runs=$(gh run list --workflow collect.yml --created "$TODAY" --limit 20 --json databaseId --jq 'length') || return 1
+            if [ "$pipeline_runs" = "0" ]; then
+              echo "Daily pipeline never started for $TODAY. Dispatching."
+              gh workflow run collect.yml --ref "${{ github.ref_name }}" || return 1
             else
-              echo "Sync workflow already has $sync_runs run(s) today. Leaving it alone."
+              echo "Daily pipeline already has $pipeline_runs run(s) today. Leaving it alone."
             fi
-          fi
+
+            if [ "$DOW" = "2" ]; then
+              sync_runs=$(gh run list --workflow sync_nflverse.yml --created "$TODAY" --limit 20 --json databaseId --jq 'length') || return 1
+              if [ "$sync_runs" = "0" ]; then
+                echo "Tuesday sync and compose never started. Dispatching."
+                gh workflow run sync_nflverse.yml --ref "${{ github.ref_name }}" || return 1
+              else
+                echo "Sync workflow already has $sync_runs run(s) today. Leaving it alone."
+              fi
+            fi
+          }
+
+          for attempt in 1 2 3; do
+            if run_check; then
+              echo "Recover check succeeded on attempt ${attempt}/3."
+              exit 0
+            fi
+            echo "Recover check attempt ${attempt}/3 failed."
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Recover check failed after 3 attempts. It could not list or restart today's collect and compose runs."
+              exit 1
+            fi
+            sleep $((attempt * 15))
+          done
