@@ -28,6 +28,7 @@ from .storage import (
     log_pipeline_run,
     save_sections,
 )
+from .roster_check import load_roster_index, section_roster_flags
 from .tables import ISSUES
 from .teams import division_groups, load_teams
 from .weekly_input import build_league_weekly_input, build_team_weekly_input
@@ -275,11 +276,27 @@ def main() -> None:
             "id", issue_id
         ).execute()
 
+        try:
+            roster_index = load_roster_index()
+        except Exception as exc:
+            print(f"[weekly] roster check skipped: {exc}", flush=True)
+            roster_index = {}
+        abbr_by_slug = {t.slug: t.abbrev.upper() for t in teams}
+
         sb_sections = []
         for sec in sections:
             team_id = slug_to_id.get(sec["team_slug"])
             if not team_id:
                 continue
+            if roster_index and sec["team_slug"] in abbr_by_slug:
+                roster_flags = section_roster_flags(
+                    f"{sec.get('intro_paragraphs') or ''}\n{sec.get('fantasy_markdown') or ''}",
+                    abbr_by_slug[sec["team_slug"]],
+                    roster_index,
+                )
+                if roster_flags:
+                    print(f"[weekly] {sec['team_slug']}: {'; '.join(roster_flags)}", flush=True)
+                    sec["flags"] = [*(sec.get("flags") or []), *roster_flags]
             sb_sections.append(
                 {
                     "team_id": team_id,

@@ -18,7 +18,9 @@ from .compose_context import (
     _fetch_skill_injuries,
     latest_team_game,
     latest_week_usage_players,
+    season_usage_summary,
     skill_player_names,
+    team_week_status,
 )
 from .dedupe import cluster_items
 from .league_feed import cluster_league_feed, extract_league_feed_items
@@ -513,14 +515,22 @@ def build_team_weekly_input(
         )
 
     names = skill_player_names(team.abbrev.upper())
-    usage_window, usage_by_name = latest_week_usage_players(team.abbrev.upper())
-    story_arcs = build_story_arcs(
-        topic_clusters, names, usage_by_name, usage_window
-    )
-    play_sit_payoffs = build_play_sit_payoffs(
-        topic_clusters, names, usage_by_name, usage_window
-    )
-    game_box = build_game_box(team, usage_window, usage_by_name)
+    try:
+        status = team_week_status(team.abbrev.upper())
+    except Exception as exc:
+        print(f"[weekly] {team.abbrev} week status skipped: {exc}", flush=True)
+        status = None
+    on_bye = bool(status and status.get("bye"))
+    story_arcs: list[dict[str, Any]] = []
+    play_sit_payoffs: list[dict[str, Any]] = []
+    game_box = None
+    if not on_bye:
+        usage_window, usage_by_name = latest_week_usage_players(team.abbrev.upper())
+        story_arcs = build_story_arcs(topic_clusters, names, usage_by_name, usage_window)
+        play_sit_payoffs = build_play_sit_payoffs(
+            topic_clusters, names, usage_by_name, usage_window
+        )
+        game_box = build_game_box(team, usage_window, usage_by_name)
     for cluster in topic_clusters:
         cluster.pop("content_dates", None)
 
@@ -531,6 +541,13 @@ def build_team_weekly_input(
         "week_label": recap_label(weekly_issue_date),
         "topic_clusters": topic_clusters,
     }
+    if on_bye:
+        bye = dict(status or {})
+        try:
+            bye["season_usage"] = season_usage_summary(team.abbrev.upper())
+        except Exception as exc:
+            print(f"[weekly] {team.abbrev} season usage skipped: {exc}", flush=True)
+        out["bye_week"] = bye
     if game_box:
         out["game_box"] = game_box
     if story_arcs:

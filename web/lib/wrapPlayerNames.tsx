@@ -8,7 +8,7 @@ import {
   type InferredRoleMap,
 } from "@/lib/nameRoleInference";
 import { normalizePlayerKey, type FantasyPosition } from "@/lib/positions";
-import { getTeamNameLexicon } from "@/lib/teams";
+import { getTeamNameLexicon, getTeams } from "@/lib/teams";
 
 const SUFFIX_TOKENS = new Set(["jr", "sr", "ii", "iii", "iv", "v"]);
 const TOKEN_RE = /^[A-Za-z][A-Za-z'’.-]*/;
@@ -100,6 +100,8 @@ export type ChipMatcher = {
   inferredRoles: InferredRoleMap;
   /** First resolved role for a key wins for the whole section. */
   lockedRoles: Map<string, FantasyPosition>;
+  /** Section team (normalized abbrev); null for the league opener. */
+  teamKey: string | null;
 };
 
 /** Tracks players already chipped within one paragraph/list-item render. */
@@ -378,7 +380,34 @@ export function buildChipMatcher(
     byNormalized: lookup.byNormalized,
     inferredRoles,
     lockedRoles,
+    teamKey,
   };
+}
+
+let cityByAbbr: Map<string, string> | null = null;
+
+function teamCity(abbr: string): string | null {
+  if (!cityByAbbr) {
+    cityByAbbr = new Map();
+    for (const t of getTeams()) {
+      const parts = t.name.split(/\s+/).filter(Boolean);
+      if (parts.length > 1) {
+        cityByAbbr.set(t.abbrev.toUpperCase(), parts.slice(0, -1).join(" ").toLowerCase());
+      }
+    }
+  }
+  return cityByAbbr.get(abbr) ?? null;
+}
+
+/**
+ * Bare "Washington" / "Dallas" / "Houston" is the franchise unless we are in the
+ * player's own team section and that team is not the city in question.
+ */
+function bareCityAllowed(key: string, entry: PlayerLookupEntry, matcher: ChipMatcher): boolean {
+  if (!getTeamNameLexicon().cities.includes(key)) return true;
+  if (!matcher.teamKey) return false;
+  const entryTeam = entry.teamAbbr ? normalizeTeamAbbr(entry.teamAbbr) : null;
+  return entryTeam === matcher.teamKey && teamCity(matcher.teamKey) !== key;
 }
 
 const TEAM_ALIAS: Record<string, string> = { AZ: "ARI", LA: "LAR" };
@@ -463,6 +492,7 @@ function matchAt(
     }
     // Bare "battle" / "young" / "rush" is prose, not a player surname chip.
     if (SURNAME_STOPWORDS.has(key)) return null;
+    if (!bareCityAllowed(key, bySurname, matcher)) return null;
     // Lowercase "bell" in "bell cow" is prose; real surnames are capitalized.
     if (token[0] !== token[0].toUpperCase()) return null;
     if (key === "bell" && /^[\s-]+cows?\b/i.test(text.slice(i + bareToken(token).length))) {
@@ -488,6 +518,7 @@ function matchAt(
     // "will" / "drew" / lowercase auxiliaries are never player chips.
     if (FIRST_NAME_STOPWORDS.has(key)) return null;
     if (token[0] !== token[0].toUpperCase()) return null;
+    if (!bareCityAllowed(key, byFirst, matcher)) return null;
     // "Adam Schefter" — next token is a different capitalized surname; do not
     // expand bare Adam into Adam Randall.
     const next = nextBareTokenAfter(text, i + bareToken(token).length);
@@ -600,12 +631,12 @@ function resolveExactName(text: string, matcher: ChipMatcher): PlayerLookupEntry
   if (direct) return direct;
   if (!/\s/.test(name)) {
     const key = tokenKey(bareToken(name));
-    return (
+    const entry =
       matcher.surnames.get(key) ??
       matcher.teamSurnames.get(key) ??
       matcher.firstNames.get(key) ??
-      null
-    );
+      null;
+    return entry && bareCityAllowed(key, entry, matcher) ? entry : null;
   }
   return null;
 }

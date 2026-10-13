@@ -923,6 +923,185 @@ def _defense_to_date(season_type: str, through_week: int) -> dict[str, dict[str,
     return per_game
 
 
+def current_league_week(season_type: str = "REG") -> int | None:
+    """Latest week with any completed game league-wide (a club on bye still lives in this week)."""
+    try:
+        rows = (
+            get_client()
+            .table("team_week_results")
+            .select("week")
+            .eq("season", USAGE_SEASON)
+            .eq("season_type", season_type)
+            .not_.is_("points_for", "null")
+            .order("week", desc=True)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+    except Exception:
+        return None
+    return int(rows[0]["week"]) if rows else None
+
+
+def _offense_to_date(season_type: str, through_week: int) -> dict[str, dict[str, Any]]:
+    """Per-team points scored, yards gained, and giveaways per game, with ranks (1 = most)."""
+    rows = (
+        get_client()
+        .table("team_week_results")
+        .select("opponent_abbr, points_against, yards_allowed, turnovers_forced")
+        .eq("season", USAGE_SEASON)
+        .eq("season_type", season_type)
+        .lte("week", through_week)
+        .not_.is_("points_for", "null")
+        .execute()
+        .data
+        or []
+    )
+    acc: dict[str, dict[str, float]] = defaultdict(lambda: {"g": 0, "pts": 0.0, "yds": 0.0, "to": 0.0})
+    for r in rows:
+        a = acc[_canon_team(r["opponent_abbr"])]
+        a["g"] += 1
+        a["pts"] += _num(r.get("points_against"))
+        a["yds"] += _num(r.get("yards_allowed"))
+        a["to"] += _num(r.get("turnovers_forced"))
+    per_game = {
+        team: {
+            "points_pg": round(a["pts"] / a["g"], 1),
+            "yards_pg": round(a["yds"] / a["g"], 1),
+            "giveaways_pg": round(a["to"] / a["g"], 2),
+        }
+        for team, a in acc.items()
+        if a["g"]
+    }
+    for key, rank_key in (
+        ("points_pg", "points_scored_rank"),
+        ("yards_pg", "yards_rank"),
+        ("giveaways_pg", "giveaways_rank"),
+    ):
+        ordered = sorted(per_game, key=lambda t: -per_game[t][key])
+        for i, team in enumerate(ordered, start=1):
+            per_game[team][rank_key] = i
+    return per_game
+
+
+def _record(rows: list[dict[str, Any]]) -> str:
+    w = l = t = 0
+    for r in rows:
+        pf, pa = _num(r.get("points_for")), _num(r.get("points_against"))
+        if pf > pa:
+            w += 1
+        elif pf < pa:
+            l += 1
+        else:
+            t += 1
+    return f"{w}-{l}" + (f"-{t}" if t else "")
+
+
+def team_week_status(team_abbr: str) -> dict[str, Any] | None:
+    """Did this club play in the current league week? On a bye: record plus division rivals' results."""
+    week = current_league_week()
+    if week is None:
+        return None
+    try:
+        rows = (
+            get_client()
+            .table("team_week_results")
+            .select("week, team_abbr, opponent_abbr, home, points_for, points_against")
+            .eq("season", USAGE_SEASON)
+            .eq("season_type", "REG")
+            .lte("week", week)
+            .not_.is_("points_for", "null")
+            .execute()
+            .data
+            or []
+        )
+    except Exception:
+        return None
+    by_team: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for r in rows:
+        by_team[_canon_team(r["team_abbr"])].append(r)
+    abbr = _canon_team(team_abbr)
+    mine = by_team.get(abbr, [])
+    out: dict[str, Any] = {
+        "week": week,
+        "played": any(int(r["week"]) == week for r in mine),
+        "record": _record(mine),
+    }
+    if out["played"]:
+        return out
+    out["bye"] = True
+    from .teams import load_teams
+
+    teams = load_teams()
+    me = next((t for t in teams if _canon_team(t.abbrev.upper()) == abbr), None)
+    rivals = [
+        _canon_team(t.abbrev.upper())
+        for t in teams
+        if me and t.conference == me.conference and t.division == me.division and t is not me
+    ]
+    results = []
+    for rival in rivals:
+        game = next((r for r in by_team.get(rival, []) if int(r["week"]) == week), None)
+        item: dict[str, Any] = {"team": rival, "record": _record(by_team.get(rival, []))}
+        if game:
+            pf, pa = _num(game["points_for"]), _num(game["points_against"])
+            item["week_result"] = (
+                f"{'beat' if pf > pa else 'lost to' if pf < pa else 'tied'} "
+                f"{_canon_team(game['opponent_abbr'])} {int(pf)}-{int(pa)}"
+            )
+        else:
+            item["week_result"] = "bye"
+        results.append(item)
+    out["division_rivals"] = results
+    return out
+
+
+def season_usage_summary(team_abbr: str, *, limit: int = 8) -> list[dict[str, Any]]:
+    """Year-to-date skill usage per player: games, avg snap share, target and carry share, PPR per game."""
+    rows = (
+        get_client()
+        .table("player_week_usage")
+        .select("player_name, position, week, snap_pct, targets, team_targets, carries, team_carries, fantasy_points_ppr")
+        .eq("season", USAGE_SEASON)
+        .eq("season_type", "REG")
+        .in_("team_abbr", list(usage_team_abbrs(team_abbr)))
+        .in_("position", ["QB", "RB", "WR", "TE"])
+        .execute()
+        .data
+        or []
+    )
+    acc: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        a = acc.setdefault(
+            r["player_name"],
+            {"pos": r["position"], "g": 0, "snap": 0.0, "tgt": 0.0, "team_tgt": 0.0, "car": 0.0, "team_car": 0.0, "ppr": 0.0},
+        )
+        a["g"] += 1
+        a["snap"] += _num(r.get("snap_pct"))
+        a["tgt"] += _num(r.get("targets"))
+        a["team_tgt"] += _num(r.get("team_targets"))
+        a["car"] += _num(r.get("carries"))
+        a["team_car"] += _num(r.get("team_carries"))
+        a["ppr"] += _num(r.get("fantasy_points_ppr"))
+    out = []
+    for name, a in acc.items():
+        item: dict[str, Any] = {
+            "name": name,
+            "pos": a["pos"],
+            "games": a["g"],
+            "avg_snap_pct": round(a["snap"] / a["g"]),
+            "ppr_per_game": round(a["ppr"] / a["g"], 1),
+        }
+        if a["team_tgt"] and a["tgt"]:
+            item["target_share_pct"] = round(100 * a["tgt"] / a["team_tgt"], 1)
+        if a["team_car"] and a["car"]:
+            item["carry_share_pct"] = round(100 * a["car"] / a["team_car"], 1)
+        out.append(item)
+    out.sort(key=lambda x: -x["ppr_per_game"] * x["games"])
+    return out[:limit]
+
+
 def _week_line(r: dict[str, Any]) -> str:
     pos = (r.get("position") or "").upper()
     parts: list[str] = []
@@ -940,6 +1119,13 @@ def _week_line(r: dict[str, Any]) -> str:
             f"{r.get('receiving_tds') or 0} TD"
         )
     return "; ".join(parts)
+
+
+def _weekday(gameday: Any) -> str | None:
+    try:
+        return date.fromisoformat(str(gameday)[:10]).strftime("%A")
+    except ValueError:
+        return None
 
 
 def _injury_label(injury_type: str | None, detail: str | None) -> str:
@@ -982,6 +1168,7 @@ def league_week_board(issue_date: date) -> dict[str, Any] | None:
                 "away_pts": r["points_against"],
                 "home_pts": r["points_for"],
                 "gameday": r.get("gameday"),
+                "day": _weekday(r.get("gameday")),
             })
     games.sort(key=lambda g: (g["gameday"] or "", g["home"]))
 
@@ -1036,6 +1223,11 @@ def league_week_board(issue_date: date) -> dict[str, Any] | None:
         season_ppr[(_norm_name(r["player_name"]), _canon_team(r["team_abbr"]))] += _num(
             r.get("fantasy_points_ppr")
         )
+    played_this_week = {
+        (_norm_name(r["player_name"]), _canon_team(r["team_abbr"]))
+        for r in this_week
+        if (r.get("pass_attempts") or 0) + (r.get("carries") or 0) + (r.get("targets") or 0) > 0
+    }
 
     injuries: list[dict[str, Any]] = []
     try:
@@ -1055,13 +1247,15 @@ def league_week_board(issue_date: date) -> dict[str, Any] | None:
         serious = any(s in status for s in ("OUT", "DOUBTFUL", "RESERVE", "IR"))
         if not serious and "QUESTIONABLE" not in status:
             continue
-        pts = season_ppr.get((_norm_name(r["player_name"]), _canon_team(r["team_abbr"])), 0.0)
+        key = (_norm_name(r["player_name"]), _canon_team(r["team_abbr"]))
+        pts = season_ppr.get(key, 0.0)
         if pts < (35 if serious else 50):
             continue
         injuries.append({
             "name": r["player_name"],
             "team": _canon_team(r["team_abbr"]),
             "pos": r.get("position"),
+            "played_this_week": key in played_this_week,
             "status": r.get("status"),
             "injury": _injury_label(r.get("injury_type"), r.get("injury_detail")),
             "return_date": r.get("return_date"),
@@ -1073,7 +1267,12 @@ def league_week_board(issue_date: date) -> dict[str, Any] | None:
     nxt = [r for r in results if int(r["week"]) == week + 1]
     next_games = sorted(
         (
-            {"away": _canon_team(r["opponent_abbr"]), "home": _canon_team(r["team_abbr"]), "gameday": r.get("gameday")}
+            {
+                "away": _canon_team(r["opponent_abbr"]),
+                "home": _canon_team(r["team_abbr"]),
+                "gameday": r.get("gameday"),
+                "day": _weekday(r.get("gameday")),
+            }
             for r in nxt
             if r.get("home")
         ),
@@ -1082,16 +1281,53 @@ def league_week_board(issue_date: date) -> dict[str, Any] | None:
     playing = {g["away"] for g in next_games} | {g["home"] for g in next_games}
     byes = sorted(t for t in records if t not in playing) if next_games else []
 
+    played_teams = {g["away"] for g in games} | {g["home"] for g in games}
     return {
         "week": week,
         "games": games,
+        "byes_this_week": sorted(t for t in records if t not in played_teams),
         "records": records,
         "unbeaten": unbeaten,
         "winless": winless,
         "top_ppr": top_ppr,
         "notable_injuries": injuries[:14],
-        "next_week": {"week": week + 1, "games": next_games, "byes": byes},
+        "next_week": {
+            "week": week + 1,
+            "games": next_games,
+            "byes": byes,
+            "bye_team_top_players": _bye_team_top_players(byes, season_ppr),
+        },
     }
+
+
+def _bye_team_top_players(
+    byes: list[str], season_ppr: dict[tuple[str, str], float], per_team: int = 3
+) -> dict[str, list[str]]:
+    """Top season PPR scorers still on each bye team's active roster (no departed or IR names)."""
+    if not byes:
+        return {}
+    try:
+        roster = (
+            get_client()
+            .table("rosters_2026")
+            .select("full_name, team_abbr, status")
+            .in_("team_abbr", [a for t in byes for a in usage_team_abbrs(t)])
+            .eq("status", "ACT")
+            .execute()
+            .data
+            or []
+        )
+    except Exception:
+        return {}
+    active = {(_norm_name(r["full_name"]), _canon_team(r["team_abbr"])): r["full_name"] for r in roster}
+    out: dict[str, list[str]] = {}
+    for team in byes:
+        ranked = sorted(
+            ((pts, active[key]) for key, pts in season_ppr.items() if key[1] == team and key in active),
+            reverse=True,
+        )
+        out[team] = [name for _, name in ranked[:per_team]]
+    return out
 
 
 def next_team_game(team_abbr: str) -> dict[str, Any] | None:
@@ -1099,7 +1335,8 @@ def next_team_game(team_abbr: str) -> dict[str, Any] | None:
     latest = latest_team_game(team_abbr)
     if not latest or latest.get("season_type") != "REG":
         return None
-    week = int(latest["week"]) + 1
+    current = current_league_week() or int(latest["week"])
+    week = current + 1
     sb = get_client()
     try:
         rows = (
@@ -1125,13 +1362,20 @@ def next_team_game(team_abbr: str) -> dict[str, Any] | None:
         "opponent": opp,
         "home": row.get("home"),
         "gameday": row.get("gameday"),
+        "day": _weekday(row.get("gameday")),
     }
     try:
-        defense = _defense_to_date("REG", int(latest["week"])).get(opp)
+        defense = _defense_to_date("REG", current).get(opp)
     except Exception:
         defense = None
     if defense:
         out["opponent_defense_2026"] = defense
+    try:
+        offense = _offense_to_date("REG", current).get(opp)
+    except Exception:
+        offense = None
+    if offense:
+        out["opponent_offense_2026"] = offense
     stats = _fetch_one("nfl_team_context_2025", opp)
     if stats:
         out["opponent_defense_2025"] = {
@@ -1342,7 +1586,9 @@ def load_compose_context(team: Team) -> str:
         "round/pick in today's news (round 0 or missing = unknown). "
         "Fantasy_skill_depth = authoritative depth order for prose labels (WR1 WR2 WR3 …). "
         "If you say someone is WR2/WR3, those numbers MUST match this list unless you explicitly "
-        "quote a conflicting camp depth chart. name_collisions lists last names on THIS roster "
+        "quote a conflicting camp depth chart. In the regular season, usage outranks this list: never "
+        "tag a player with a depth slot (WR3 in the depth order, WR5 by depth) when his targets or "
+        "carries say he is the lead option; describe the role he actually plays. name_collisions lists last names on THIS roster "
         "that also exist elsewhere (Houston Higgins is Jayden, never Tee). If a source uses only "
         "a last name, pick the this_team player. skill_position_battles = YOUR curated truth for "
         "which slots are settled vs contested vs open (any skill position). "
@@ -1357,6 +1603,9 @@ def load_compose_context(team: Team) -> str:
         "sos_2026_rank and sos_2026_opp_win_pct (lower opp win pct / easier SOS favors "
         "already-strong team DEF. Elite 2025 units (top ~8 yards or points) are earlier-round "
         "DEF targets, not vague late-round fliers; easy SOS does not rescue a weak unit). "
+        "That draft and SOS guidance is preseason only: once regular-season games exist, judge team "
+        "DEF by its 2026 results and the next_game matchup, and never give draft-round advice. "
+        "latest_game can predate a bye; when bye_week is in the weekly input, do not retell it. "
         "skill_usage = PPR box + rush/target shares for the latest available 2026 week "
         "(nflverse when published; ESPN preseason boxes until then). snaps = offense_snaps; "
         "pass_attempts is present on ESPN rows when snaps are not. Cite ONLY numbers in this "
