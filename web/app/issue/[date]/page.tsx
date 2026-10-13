@@ -7,8 +7,8 @@ import {
   fetchPlayerPositionLookup,
   serializePlayerLookup,
 } from "@/lib/playerRegistry";
-import { fetchUsageForWeek, usageByTeamAbbr } from "@/lib/playerUsage";
-import { fetchTeamGames, type TeamGame } from "@/lib/teamGames";
+import { fetchIssueUsagePanels, prefetchUsageRows } from "@/lib/playerUsage";
+import { fetchTeamGames } from "@/lib/teamGames";
 import { entriesMentionedIn } from "@/lib/wrapPlayerNames";
 
 type Props = {
@@ -54,8 +54,17 @@ export default async function IssuePage({ params, searchParams }: Props) {
   const gamesPromise = weekNum
     ? fetchTeamGames(2026, "REG").catch(() => null)
     : null;
+  if (weekNum) prefetchUsageRows(2026, "REG");
+  const panelsPromise =
+    weekNum && gamesPromise
+      ? gamesPromise.then((games) =>
+          fetchIssueUsagePanels({ season: 2026, week: weekNum, games }).catch(
+            () => undefined
+          )
+        )
+      : undefined;
 
-  const [{ data: sections }, playerLookup, adjacent, usageRows] = await Promise.all([
+  const [{ data: sections }, playerLookup, adjacent, usagePanels] = await Promise.all([
     supabase
       .from("newsletter_sections")
       .select("*, newsletter_teams(slug, name, abbrev)")
@@ -65,27 +74,13 @@ export default async function IssuePage({ params, searchParams }: Props) {
     fetchAdjacentIssues(issue.issue_date, issue.issue_type as "daily" | "weekly", {
       includeDrafts: Boolean(viewer?.isAdmin),
     }),
-    weekNum
-      ? fetchUsageForWeek({ season: 2026, seasonType: "REG", week: weekNum }).catch(
-          () => null
-        )
-      : null,
+    panelsPromise,
   ]);
 
   const playerEntries = entriesMentionedIn(
     serializePlayerLookup(playerLookup),
     collectStrings([issue.title, issue.league_section, sections]).join("\n")
   );
-  const usageByTeam = usageRows ? usageByTeamAbbr(usageRows) : undefined;
-  const usageWeekLabel = usageRows && weekNum ? `Week ${weekNum}` : undefined;
-  const games = await gamesPromise;
-  const usageMatchups: Record<string, TeamGame> = {};
-  if (games && weekNum) {
-    for (const [team, list] of Object.entries(games)) {
-      const game = list.find((g) => g.week === weekNum);
-      if (game) usageMatchups[team] = game;
-    }
-  }
 
   return (
     <IssueView
@@ -110,9 +105,7 @@ export default async function IssuePage({ params, searchParams }: Props) {
       playerEntries={playerEntries}
       adjacentPrev={adjacent.prev}
       adjacentNext={adjacent.next}
-      usageByTeam={usageByTeam}
-      usageWeekLabel={usageWeekLabel}
-      usageMatchups={usageMatchups}
+      usagePanels={usagePanels}
       isAdmin={Boolean(viewer?.isAdmin)}
     />
   );

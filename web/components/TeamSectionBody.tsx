@@ -6,8 +6,7 @@ import { ReferencesDropdown } from "@/components/ReferencesDropdown";
 import { TeamUsagePanel } from "@/components/TeamUsagePanel";
 import { cleanCopy } from "@/lib/cleanCopy";
 import { usableField, type TeamSectionContent } from "@/lib/sections";
-import type { PlayerWeekUsage } from "@/lib/playerUsage";
-import type { TeamGame } from "@/lib/teamGames";
+import type { TeamUsagePanelData } from "@/lib/playerUsage";
 import { buildChipMatcher } from "@/lib/wrapPlayerNames";
 import { deserializePlayerLookup } from "@/lib/playerRegistry";
 
@@ -15,9 +14,7 @@ type Props = {
   section: TeamSectionContent;
   playerEntries?: import("@/lib/playerRegistry").PlayerLookupEntry[];
   teamAbbr?: string | null;
-  usageRows?: PlayerWeekUsage[];
-  usageWeekLabel?: string;
-  usageMatchup?: TeamGame;
+  usage?: TeamUsagePanelData;
 };
 
 function cleanField(value: string | null | undefined): string | null {
@@ -28,9 +25,7 @@ export function TeamSectionBody({
   section,
   playerEntries = [],
   teamAbbr,
-  usageRows,
-  usageWeekLabel,
-  usageMatchup,
+  usage,
 }: Props) {
   const intro = cleanField(section.intro_paragraphs);
   const fantasy = cleanField(section.fantasy_markdown);
@@ -72,13 +67,7 @@ export function TeamSectionBody({
           contextText={sectionContext}
         />
       )}
-      {usageRows && usageRows.length > 0 ? (
-        <TeamUsagePanel
-          rows={usageRows}
-          weekLabel={usageWeekLabel}
-          matchup={usageMatchup}
-        />
-      ) : null}
+      {usage && usage.rows.length > 0 ? <TeamUsagePanel {...usage} /> : null}
       {footnotes.length > 0 && <ReferencesDropdown footnotes={footnotes} />}
     </div>
   );

@@ -46,11 +46,8 @@ type Props = {
   playerEntries?: import("@/lib/playerRegistry").PlayerLookupEntry[];
   adjacentPrev?: AdjacentIssue | null;
   adjacentNext?: AdjacentIssue | null;
-  /** Week skill usage keyed by team abbrev (LAR/ARI/WAS). Weekly REG only. */
-  usageByTeam?: Record<string, import("@/lib/playerUsage").PlayerWeekUsage[]>;
-  usageWeekLabel?: string;
-  /** This week's game keyed by team abbrev (LAR/ARI/WAS). */
-  usageMatchups?: Record<string, import("@/lib/teamGames").TeamGame>;
+  /** Usage panel keyed by team abbrev (LAR/ARI/WAS). Weekly REG only. */
+  usagePanels?: Record<string, import("@/lib/playerUsage").TeamUsagePanelData>;
   isAdmin?: boolean;
 };
 
@@ -67,9 +64,7 @@ export function IssueView({
   playerEntries = [],
   adjacentPrev = null,
   adjacentNext = null,
-  usageByTeam,
-  usageWeekLabel,
-  usageMatchups,
+  usagePanels,
   isAdmin = false,
 }: Props) {
   const hasContent = sections.some(
@@ -202,13 +197,7 @@ export function IssueView({
                     section={sec}
                     playerEntries={playerEntries}
                     teamAbbr={sec.teams.abbrev}
-                    usageRows={
-                      usageByTeam
-                        ? usageByTeam[sec.teams.abbrev.toUpperCase()]
-                        : undefined
-                    }
-                    usageWeekLabel={usageWeekLabel}
-                    usageMatchup={usageMatchups?.[sec.teams.abbrev.toUpperCase()]}
+                    usage={usagePanels?.[sec.teams.abbrev.toUpperCase()]}
                   />
                 )}
               </article>

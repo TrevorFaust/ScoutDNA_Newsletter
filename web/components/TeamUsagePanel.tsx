@@ -3,17 +3,10 @@
 import { useMemo, useState } from "react";
 import { MatchupTag } from "@/components/MatchupTag";
 import { UsagePosTable } from "@/components/UsagePosTable";
-import type { PlayerWeekUsage } from "@/lib/playerUsage";
-import type { TeamGame } from "@/lib/teamGames";
+import type { TeamUsagePanelData } from "@/lib/playerUsage";
 import { POS_TABS, rowsForTab, type PosTab } from "@/lib/usageDisplay";
 
-type Props = {
-  rows: PlayerWeekUsage[];
-  weekLabel?: string;
-  matchup?: TeamGame;
-};
-
-export function TeamUsagePanel({ rows, weekLabel, matchup }: Props) {
+export function TeamUsagePanel({ rows, title, matchup, note }: TeamUsagePanelData) {
   const available = useMemo(() => {
     return POS_TABS.filter((tab) => rowsForTab(rows, tab).length > 0);
   }, [rows]);
@@ -29,10 +22,9 @@ export function TeamUsagePanel({ rows, weekLabel, matchup }: Props) {
     <div className="team-usage-panel">
       <div className="team-usage-panel-header">
         <div className="usage-team-heading">
-          <h4 className="team-usage-panel-title">
-            Week usage{weekLabel ? ` · ${weekLabel}` : ""}
-          </h4>
+          <h4 className="team-usage-panel-title">{title}</h4>
           {matchup ? <MatchupTag game={matchup} /> : null}
+          {note ? <span className="matchup-tag">{note}</span> : null}
         </div>
         <div className="team-usage-tabs" role="tablist" aria-label="Position usage">
           {available.map((t) => (

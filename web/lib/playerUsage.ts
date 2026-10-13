@@ -1,4 +1,5 @@
 import { createServerClient } from "@/lib/supabase";
+import type { TeamGame, TeamGamesByTeam } from "@/lib/teamGames";
 
 export const USAGE_SEASONS = [2026, 2025] as const;
 export const USAGE_TYPES = ["PRE", "REG", "POST"] as const;
@@ -184,16 +185,48 @@ async function loadUsageMeta(): Promise<{
   return { seasons: seasons.length ? seasons : [...USAGE_SEASONS], latest };
 }
 
-/** One REG/PRE/POST week for all teams (or one team). Used on weekly issue pages. */
-export async function fetchUsageForWeek(opts: {
+export type TeamUsagePanelData = {
+  rows: PlayerWeekUsage[];
+  title: string;
+  matchup?: TeamGame;
+  note?: string;
+};
+
+/**
+ * Per-team usage panels for a weekly issue. Teams that played get that week's
+ * rows; bye teams get season-to-date totals through the prior week.
+ */
+export async function fetchIssueUsagePanels(opts: {
   season: number;
-  seasonType?: UsageSeasonType;
   week: number;
-  team?: string | null;
-}): Promise<PlayerWeekUsage[]> {
-  const seasonType = opts.seasonType ?? "REG";
-  const all = await fetchAllUsage(opts.season, seasonType, opts.team);
-  return all.filter((r) => Number(r.week) === opts.week);
+  games: TeamGamesByTeam | null;
+}): Promise<Record<string, TeamUsagePanelData>> {
+  const { season, week, games } = opts;
+  const all = await fetchAllUsage(season, "REG");
+  const byTeam = usageByTeamAbbr(all.filter((r) => Number(r.week) <= week));
+  const weekSynced = all.some((r) => Number(r.week) === week);
+  const panels: Record<string, TeamUsagePanelData> = {};
+
+  for (const [team, rows] of Object.entries(byTeam)) {
+    const game = games?.[team]?.find((g) => g.week === week);
+    const weekRows = rows.filter((r) => Number(r.week) === week);
+    if (weekRows.length) {
+      panels[team] = { rows: weekRows, title: `Week usage · Week ${week}`, matchup: game };
+      continue;
+    }
+    if (!weekSynced || game) continue;
+    const prior = rows.filter((r) => Number(r.week) < week);
+    if (!prior.length) continue;
+    const weeks = prior.map((r) => Number(r.week));
+    const first = Math.min(...weeks);
+    const last = Math.max(...weeks);
+    panels[team] = {
+      rows: seasonToDate(prior),
+      title: `Season to date · ${first === last ? `Week ${first}` : `Weeks ${first}–${last}`}`,
+      note: `Bye in Week ${week}`,
+    };
+  }
+  return panels;
 }
 
 /** Group by canonical team abbr (LAR/ARI/WAS). */
