@@ -14,34 +14,72 @@ jobs:
   recover:
     runs-on: ubuntu-24.04
     steps:
-      - name: Restart collect or Tuesday compose if today's job never started
+      - name: Restart collect or sync if today's job never started or failed
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -uo pipefail
 
+          # none | busy | ok | already-retried | failed
+          latest_state() {
+            local workflow="$1"
+            local json line
+            json=$(gh run list --workflow "$workflow" --created "$TODAY" --limit 20 \
+              --json status,event,conclusion,createdAt) || return 1
+            line=$(echo "$json" | jq -r '
+              if length == 0 then "none none none"
+              else (sort_by(.createdAt) | last | "\(.status) \(.event) \(.conclusion // "none")")
+              end') || return 1
+            set -- $line
+            local status="$1" event="$2" conclusion="$3"
+            if [ "$status" = "none" ]; then
+              echo "none"
+            elif [ "$status" != "completed" ]; then
+              echo "busy"
+            elif [ "$conclusion" = "success" ]; then
+              echo "ok"
+            elif [ "$event" = "workflow_dispatch" ]; then
+              echo "already-retried"
+            else
+              echo "failed"
+            fi
+          }
+
+          maybe_restart() {
+            local workflow="$1"
+            local label="$2"
+            local state
+            state=$(latest_state "$workflow") || return 1
+            case "$state" in
+              none)
+                echo "$label never started for $TODAY. Dispatching."
+                gh workflow run "$workflow" --ref "${{ github.ref_name }}" || return 1
+                ;;
+              failed)
+                echo "$label failed for $TODAY. Dispatching one later retry."
+                gh workflow run "$workflow" --ref "${{ github.ref_name }}" || return 1
+                ;;
+              busy)
+                echo "$label is still running. Leaving it alone."
+                ;;
+              ok)
+                echo "$label already succeeded today. Leaving it alone."
+                ;;
+              already-retried)
+                echo "$label backup retry already ran today. Leaving it alone."
+                ;;
+              *)
+                echo "Unexpected state for $label: $state"
+                return 1
+                ;;
+            esac
+          }
+
           run_check() {
             TODAY=$(date -u +%Y-%m-%d) || return 1
-            DOW=$(TZ=America/Los_Angeles date +%u) || return 1
-
-            pipeline_runs=$(gh run list --workflow collect.yml --created "$TODAY" --limit 20 --json databaseId --jq 'length') || return 1
-            if [ "$pipeline_runs" = "0" ]; then
-              echo "Daily pipeline never started for $TODAY. Dispatching."
-              gh workflow run collect.yml --ref "${{ github.ref_name }}" || return 1
-            else
-              echo "Daily pipeline already has $pipeline_runs run(s) today. Leaving it alone."
-            fi
-
-            if [ "$DOW" = "2" ]; then
-              sync_runs=$(gh run list --workflow sync_nflverse.yml --created "$TODAY" --limit 20 --json databaseId --jq 'length') || return 1
-              if [ "$sync_runs" = "0" ]; then
-                echo "Tuesday sync and compose never started. Dispatching."
-                gh workflow run sync_nflverse.yml --ref "${{ github.ref_name }}" || return 1
-              else
-                echo "Sync workflow already has $sync_runs run(s) today. Leaving it alone."
-              fi
-            fi
+            maybe_restart collect.yml "Daily pipeline" || return 1
+            maybe_restart sync_nflverse.yml "Nflverse sync" || return 1
           }
 
           for attempt in 1 2 3; do
