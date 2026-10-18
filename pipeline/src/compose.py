@@ -168,7 +168,7 @@ Writing style:
 - Use team_stats_2025 ranks when relevant (e.g. "2025 run-block rank 3", "def yards allowed rank 1") to add context for OL/DEF unit stories.
 - coaching_2026: use HC/OC/DC/GM names and titles from the block. Jesse Minter is HC in Baltimore, not DC. GM (e.g. Omar Khan, Howie Roseman) owns trades, contracts, and draft capital moves. HC is usually offense- or defense-minded: an offensive HC (e.g. Mike McCarthy) works closely with the OC (Brian Angelichio) on scheme and usage; the DC (Patrick Graham) runs the defense with less HC sway. A defensive-minded HC mirrors that on the other side. Reference this hierarchy when news involves scheme, trades, or coordinator quotes ,  not every paragraph.
 - Uniform section shape: Daily/camp: intro_paragraphs + activity_markdown + fantasy_markdown. REG/POST weekly: intro_paragraphs + fantasy_markdown only; activity_markdown and rookie_paragraph are empty strings "". No separate Talk section. Never omit Fantasy for one team and keep it for another.
-- intro_paragraphs: narrative arc for the day's/week's biggest beats. Depth and reasoning live here. In REG, open with fantasy impact (PPR, who won/lost matchups when a star went off on TNF/MNF) when the number earns it.
+- intro_paragraphs: narrative arc for the day's/week's biggest beats. Depth and reasoning live here. A daily edition may open on the fantasy swing when a star's night decided lineups. A weekly REG/POST edition follows the opening-sentence rule in the weekly addendum: sentence 1 is the game, and PPR comes after.
 - activity_markdown: Daily/camp only. ### Activity bullets with NEW facts, quotes, injury timelines. REG/POST weekly: always "". Fold earned quotes into intro; do not parrot.
 - talk_markdown: ALWAYS return an empty string "". Do not write a ### Talk section.
 - fantasy_markdown: ### Fantasy lens ALWAYS present. Implication bullets with zest: name PPR, matchup stakes (TNF crushing Sunday lineups; MNF saving or ruining nights), and next-week outlook. Do not restatedry box scores. Skip settled-starter/no-news filler. If battles name a settled complement (Gainwell behind Irving), keep that name in the RB1 so-what. When OL or trench news is in inputs, at most one bullet on how the line affects fantasy ,  never recommend drafting an individual lineman. Never label depth in parentheses like (QB1), (RB2), (WR3). Do not tag household skill names with (QB)/(RB)/(WR)/(TE). Cues like (CB) or (RG) are fine for lesser-known or non-skill names. Use natural prose when role matters. RB1 is the starter; RB2/RB3 are backups/handcuffs. Quiet day/week = one honest bullet that there were no fantasy-relevant updates.
@@ -339,10 +339,16 @@ Rules:
 WEEKLY_STYLE_ADDENDUM = """
 Weekly recap rules (override daily "last 24h" where they conflict):
 - This is a WEEK N RECAP for the Tue-Mon Pacific window (Thursday-Monday games, plus Tue/Wed news). Synthesize the week's arc; do NOT write day-by-day chronology. Shorter and less speculative than camp/preseason copy.
-- REG/POST story (hard): lead with who scored fantasy points, how many (PPR from game_box.skill), and the outlook. Write with zest, not a wire. A 40-PPR TNF night should feel like it decided matchups before Sunday; an MNF spike should feel like it saved or ruined Monday nights. The game is the story. Do not write camp position-battle copy as the lead once a regular-season box exists. 3rd/4th-string or bubble players are not the main story. If one played a meaningful snap share and got real work (catches, carries, a score), one short flyer to keep an eye on is enough.
+- Opening sentence (hard, overrides any rule that says lead with PPR): sentence 1 is a game recap, not a box score. Name the opponent, the score, and the one thing that made this week this club's week (overtime, a blocked kick, a blowout, a quarterback leaving hurt, a statement win). Keep it under 180 characters. No carries, targets, yards, snap share, or PPR in sentence 1. Those start in sentence 2, and only for the players the week turned on. Bye week: sentence 1 is that they were off, the record, and the division result that matters. Still no stat line.
+- Franchise texture (hard): if the result needs a feeling, take it from this club, not a proverb you could paste on anyone. Use how they lost, the record, a pattern already in this season's games or in topic_clusters, or one familiar note a casual fan would recognize (Atlanta letting another close one slip, a Steelers win that was ugly and still counted). Do not invent a year, a past score, or a streak. If you are not sure the note is real, stick to this week's score and this season's record. Do not reuse stock lines: "the fantasy story", "stole the show", "hurt in the specific way that only a game you had hurts", "fantasy box", "absolute bonfire". Vary the shape from team to team.
+  Bad: "**Jaylen Warren** stole the show in Pittsburgh's 34-22 home win over Indianapolis, posting 36.8 PPR points on 15 carries for 101 yards and a touchdown, plus six catches for 87 yards and another score."
+  Good: "Pittsburgh beat Indianapolis 34-22 at home, with the offense running through Jaylen Warren." Then his carries, yards, and score in the next sentence.
+  Bad: "Atlanta's Week 5 Sunday Night Football loss to Baltimore hurt in the specific way that only a game you had hurts."
+  Good: "Atlanta lost 30-23 to Baltimore in overtime on Sunday night, the kind of close loss Falcons fans know too well."
+- REG/POST story (hard): after that opener, write the week. Name PPR from game_box.skill when a line changed lineups, inside the sentence, not as a parenthetical dump. A 40-PPR Thursday night can feel like it decided matchups before Sunday; a Monday spike can feel like it saved or ruined the week. Do not write camp position-battle copy as the lead once a regular-season box exists. 3rd/4th-string or bubble players are not the main story. If one played a meaningful snap share and got real work (catches, carries, a score), one short flyer to keep an eye on is enough.
 - REG injuries (hard): inactive / DNP / in-game exit / day-to-day / IR belong in the same beat as the quiet line. Never describe an inactive as "unclear usage." Prefer injury_status notes (and topic_clusters) over inventing play-by-play.
 - topic_clusters include day_count (how many distinct days the story appeared). Higher day_count = more prominent unless the week's game from game_box is the bigger story.
-- game_box (when present): authoritative box for this club's latest completed game. REG/POST: lead the intro with that game. Named players do not need a counting line on every mention; use game_box.skill.line, rb_rush_share, and ppr when the number helps the beat. Never invent.
+- game_box (when present): authoritative box for this club's latest completed game. REG/POST: sentence 1 uses opponent and score only. Named players do not need a counting line on every mention; use game_box.skill.line, rb_rush_share, and ppr from sentence 2 on, when the number helps the beat. Never invent.
 - Snap share (hard): do NOT attach snap percent to every player, and never by habit to WRs. Use it only when it is the story: a role jump or collapse versus prior weeks (ppr_by_week / snaps history), an RB split, a returning or injured player's limited workload, or a backup who suddenly played most of the game. A starter at his normal share gets no snap number. At most two snap mentions per section.
 - No stat tails (hard): when a sentence tells a story (a one-handed TD, a celebration, a benching, a comeback), end on the story. Do not bolt "finishing 2 for 42 and a score in 45 percent of snaps" onto it. Put the counting line or PPR in its own clause or in Fantasy lens only if it adds something.
 - Handcuff (hard): a handcuff is the healthy BACKUP to a starter. An injured starter is never "the handcuff"; he is the starter who is out, and his fill-in is the guy managers grab now and the handcuff once he returns. Do not invent phrases like "handcuff-proof" or "handcuff risk."
@@ -394,7 +400,7 @@ def _build_team_weekly_prompt(
     return f"""Write the {team.name} section for ScoutDNA: All 32, {week_label(issue_date)}.
 Issue date: {issue_date} (Tuesday weekly cover). Week covered: {week_label(issue_date)} (Tue-Mon PT so Thursday-Monday games are in).
 
-Team tier: {team.narrative_tier}. Audience: dynasty and redraft fantasy players. Concise, grounded, slightly shorter than camp recaps. Personality and zest OK: make big PPR nights and injury swings feel like they mattered to managers.
+Team tier: {team.narrative_tier}. Audience: dynasty and redraft fantasy players. Concise, grounded, slightly shorter than camp recaps. Sentence 1 is the game for this franchise. PPR and counting stats come after, in the sentences that earn them.
 
 {db_block}
 
@@ -420,7 +426,7 @@ Weekly input (JSON):
 
 Return a single JSON object only (no markdown fences, no preamble, no duplicate JSON blocks):
 {{
-  "intro_paragraphs": "1-2 paragraphs ,  week's biggest beats with PPR stakes; bold names; superscript citations",
+  "intro_paragraphs": "1-2 paragraphs. Sentence 1 is a short game recap (opponent, score, what defined the week for this club) with no counting stats or PPR. Later sentences carry the box. Bold names; superscript citations",
   "rookie_paragraph": "",
   "activity_markdown": "",
   "talk_markdown": "",
@@ -554,36 +560,58 @@ def compose_team_section_weekly(
             }
         )
 
+    from .opening import opening_is_stat_line
     from .recovery import forbid_note
 
     prompt = _build_team_weekly_prompt(
         team, weekly_input, issue_date, prior_context
     ) + forbid_note(forbid_tokens)
-    data = _complete_json(
-        client,
-        prompt,
-        max_tokens=TEAM_MAX_TOKENS,
-        label=f"{team.slug} weekly",
-        fallback={
-            "intro_paragraphs": None,
-            "rookie_paragraph": "",
-            "activity_markdown": "",
-            "talk_markdown": "",
-            "fantasy_markdown": "",
-            "footnotes": [],
-            "tags": ["needs-review", "Weekly"],
-            "flags": ["parse:error"],
-            "is_empty": False,
-            "empty_reason": "Compose response was not valid JSON after 3 attempts.",
-        },
+    fallback = {
+        "intro_paragraphs": None,
+        "rookie_paragraph": "",
+        "activity_markdown": "",
+        "talk_markdown": "",
+        "fantasy_markdown": "",
+        "footnotes": [],
+        "tags": ["needs-review", "Weekly"],
+        "flags": ["parse:error"],
+        "is_empty": False,
+        "empty_reason": "Compose response was not valid JSON after 3 attempts.",
+    }
+    opener_note = (
+        "\n\nRETRY (hard): the first sentence was a stat line. "
+        "Sentence 1 must be the game or the week: opponent, score, or the bye, "
+        "and the one thing that defined it. No carries, catches, yards, targets, "
+        "or PPR in sentence 1. Put the box score in a later sentence.\n"
     )
-    data.setdefault("is_empty", False)
-    data.setdefault("flags", [])
-    tags = list(data.get("tags") or [])
-    if "Weekly" not in tags:
-        tags.append("Weekly")
-    data["tags"] = tags
-    return normalize_composed_section_weekly(data)
+    normalized: dict = {}
+    for attempt in range(1, 3):
+        data = _complete_json(
+            client,
+            prompt if attempt == 1 else prompt + opener_note,
+            max_tokens=TEAM_MAX_TOKENS,
+            label=f"{team.slug} weekly",
+            fallback=fallback,
+        )
+        data.setdefault("is_empty", False)
+        data.setdefault("flags", [])
+        tags = list(data.get("tags") or [])
+        if "Weekly" not in tags:
+            tags.append("Weekly")
+        data["tags"] = tags
+        normalized = normalize_composed_section_weekly(data)
+        intro = normalized.get("intro_paragraphs") or ""
+        if data.get("is_empty") or not opening_is_stat_line(intro):
+            return normalized
+        print(
+            f"[recover] {team.slug} weekly opener is a stat line "
+            f"(attempt {attempt}/2)",
+            flush=True,
+        )
+    raise RuntimeError(
+        f"{team.slug} weekly opener is still a stat line after 2 attempts. "
+        "Not saving this edition."
+    )
 
 
 def _sanitize_league(body: str, footnotes: object, header: dict | None = None) -> dict:

@@ -91,6 +91,21 @@ def is_transient(text: str) -> bool:
     return any(marker in low for marker in _TRANSIENT_MARKERS)
 
 
+def is_database_busy(text: str) -> bool:
+    """The database is saturated. Retrying immediately only adds more load."""
+    low = (text or "").lower()
+    return any(
+        marker in low
+        for marker in (
+            "statement timeout",
+            "57014",
+            "readtimeout",
+            "the read operation timed out",
+            "canceling statement",
+        )
+    )
+
+
 def looks_like_code_bug(log: str) -> bool:
     if "Traceback (most recent call last)" not in (log or ""):
         return False
@@ -435,8 +450,17 @@ def run_command(command: list[str], cwd: Path) -> tuple[int, str]:
     return code, "".join(tail)
 
 
-def fail_final(label: str, errors: list[str]) -> int:
-    message = exhausted_message(label, errors).replace("\r", " ").replace("\n", " ")
+def fail_final(label: str, errors: list[str], *, deferred: bool = False) -> int:
+    if deferred:
+        last = (errors[-1] if errors else "database busy").replace("\r", " ").replace("\n", " ")
+        if len(last) > 1800:
+            last = last[:1800] + "..."
+        message = (
+            f"{label} hit a busy database and was not retried immediately. "
+            f"The later check will run it once more. {last}"
+        )
+    else:
+        message = exhausted_message(label, errors).replace("\r", " ").replace("\n", " ")
     print(message, flush=True)
     if os.getenv("GITHUB_ACTIONS") == "true":
         safe = message.replace("%", "%25")
@@ -468,6 +492,13 @@ def run_with_recovery(command: list[str], *, label: str, attempts: int = ATTEMPT
         excerpt = traceback_excerpt(log).strip() or f"exit code {code}"
         errors.append(excerpt)
         print(f"[recover] {label} attempt {attempt}/{attempts} failed", flush=True)
+        if is_database_busy(log):
+            print(
+                f"[recover] {label} is waiting on a busy database. "
+                "Skipping the immediate retries so this job does not pile on.",
+                flush=True,
+            )
+            return fail_final(label, errors, deferred=True)
         if is_exhausted(log) or attempt == attempts:
             if applied:
                 try:
