@@ -146,7 +146,11 @@ export type RumorFootnote = {
  * Match those labels, plus an explicit rumor word in prose.
  */
 const RUMOR_SOURCE =
-  /\brumou?rs?\b|\breview:rumor\b|\btrade\s+(?:buzz|rumou?rs?|suitor|idea|chatter|talk|help)\b|\btop\s+trade\s+suitor\b|\blinked\b[^.]{0,80}\btrade\b|\bcalls?\s+for\s+trade\b/i;
+  /\brumou?rs?\b|\breview:rumor\b|\btrade\s+(?:buzz|rumou?rs?|suitor|idea|chatter|talks?|conversation|help)\b|\btop\s+trade\s+suitor\b|\blinked\b[^.]{0,80}\btrade\b|\bcalls?\s+for\s+trade\b|\bcould be dealt\b/i;
+
+/** Fantasy-advice lines that look like rumors because they say "speculative." */
+const FANTASY_ADVICE =
+  /\bspeculative (?:add|stash|pickup|bench)\b|\bdeeper leagues\b|\bwaiver[- ]wire\b/i;
 
 export function isRumorSourceLabel(label: string): boolean {
   return RUMOR_SOURCE.test(label);
@@ -179,7 +183,7 @@ export function usableRumorMarkdown(
  * Prose-only; footnote matching stays on RUMOR_SOURCE so reject keeps cited notes.
  */
 const SPECULATION_PROSE =
-  /\breportedly\b|\breports?\s+(?:suggest|say|indicate|claim|describ)\w*|\breporting\b[^.]{0,60}\b(?:describ|suggest|indicat)\w*|\baccording to\b|\bspeculat\w*|\bdays\s+(?:appear|seem)\s+to\s+be\s+numbered\b|\bhot seat\b|\bcould be (?:traded|moved|released|fired)\b|\b(?:trade|front-office)\s+(?:buzz|chatter)\b/i;
+  /\breportedly\b|\breports?\s+(?:suggest|say|indicate|claim|describ|float)\w*|\breporting\b[^.]{0,60}\b(?:describ|suggest|indicat|float)\w*|\baccording to\b|\bspeculation\b|\bspeculated\b|\bdays\s+(?:appear|seem)\s+to\s+be\s+numbered\b|\bhot seat\b|\bjob security\b|\btrade deadline\b|\bcould be (?:traded|moved|released|fired|dealt)\b|\b(?:trade|front-office)\s+(?:buzz|chatter)\b/i;
 
 function splitSentences(markdown: string): string[] {
   return markdown
@@ -189,21 +193,30 @@ function splitSentences(markdown: string): string[] {
     .filter((part) => part.length > 0 && !/^#{1,6}\s/.test(part));
 }
 
+function hasNamedSubject(sentence: string): boolean {
+  return /\*\*[^*]{2,}\*\*/.test(sentence) || /\b[A-Z][a-z]+ [A-Z][a-z]+/.test(sentence);
+}
+
+function isRumorSentence(part: string): boolean {
+  if (FANTASY_ADVICE.test(part)) return false;
+  return isRumorSourceLabel(part) || SPECULATION_PROSE.test(part);
+}
+
 function rumorSentences(markdown: string | null | undefined): string[] {
   if (!markdown?.trim()) return [];
-  return splitSentences(markdown).filter((part) => isRumorSourceLabel(part));
+  return splitSentences(markdown).filter(isRumorSentence);
 }
 
-function speculationSentences(markdown: string | null | undefined): string[] {
-  if (!markdown?.trim()) return [];
-  return splitSentences(markdown).filter((part) => SPECULATION_PROSE.test(part));
-}
-
-/** Rumor sentences in weekly prose: explicit rumor words first, reporting language as fallback. */
+/** Rumor sentences in weekly prose: prefer named intro reporting over "he/him" fantasy takes. */
 export function weeklyRumorSentences(intro: string, fantasy: string): string[] {
-  const explicit = [...rumorSentences(intro), ...rumorSentences(fantasy)];
-  if (explicit.length) return explicit;
-  return [...speculationSentences(intro), ...speculationSentences(fantasy)];
+  const introHits = rumorSentences(intro);
+  const fantasyHits = rumorSentences(fantasy);
+  const introNamed = introHits.filter(hasNamedSubject);
+  if (introNamed.length) return introNamed;
+  if (introHits.length) return introHits;
+  const fantasyNamed = fantasyHits.filter(hasNamedSubject);
+  if (fantasyNamed.length) return fantasyNamed;
+  return fantasyHits;
 }
 
 /**

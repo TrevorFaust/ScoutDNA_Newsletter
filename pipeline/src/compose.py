@@ -438,7 +438,7 @@ Return a single JSON object only (no markdown fences, no preamble, no duplicate 
 
 Rules:
 - Organic bullet count; never invent filler. talk_markdown, activity_markdown, and rookie_paragraph must be "".
-- flags: ["review:rumor"] only when intro_paragraphs states a rumor, trade buzz, or single-source speculation in its own sentence. Otherwise []. Do not park the rumor only in a footnote label, and never write review:rumor inside a label. Write that sentence with explicit reporting language ("reportedly", "according to", "reports suggest") so the editor can find it.
+- flags: ["review:rumor"] only when intro_paragraphs states a rumor, trade buzz, or single-source speculation in its own sentence. Otherwise []. Do not park the rumor only in a footnote label, and never write review:rumor inside a label. Write that sentence with explicit reporting language ("reportedly", "according to", "reports suggest") and the person's name in the same sentence. Do not flag a Fantasy lens "speculative add" or waiver-wire bullet as a rumor.
 - Every team returns intro + fantasy (uniform). Quiet Fantasy stub OK.
 - Never paste snake_case field names (rb_rush_share etc.); write plain English.
 - Default he/him for players and coaches.
