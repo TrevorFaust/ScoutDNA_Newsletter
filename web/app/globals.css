@@ -2150,6 +2150,17 @@ button.team-link:disabled {
   white-space: nowrap;
 }
 
+.team-jump-record {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+  font-family: var(--font-body);
+}
+
 @media (max-width: 640px) {
   .team-jump-conferences {
     grid-template-columns: 1fr;

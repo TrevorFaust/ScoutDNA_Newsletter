@@ -8,7 +8,7 @@ import {
   serializePlayerLookup,
 } from "@/lib/playerRegistry";
 import { fetchIssueUsagePanels, prefetchUsageRows } from "@/lib/playerUsage";
-import { fetchTeamGames } from "@/lib/teamGames";
+import { fetchTeamGames, recordsThroughWeek } from "@/lib/teamGames";
 import { entriesMentionedIn } from "@/lib/wrapPlayerNames";
 
 type Props = {
@@ -63,8 +63,15 @@ export default async function IssuePage({ params, searchParams }: Props) {
           )
         )
       : undefined;
+  const recordsPromise =
+    weekNum && gamesPromise
+      ? gamesPromise.then((games) =>
+          games ? recordsThroughWeek(games, weekNum) : undefined
+        )
+      : undefined;
 
-  const [{ data: sections }, playerLookup, adjacent, usagePanels] = await Promise.all([
+  const [{ data: sections }, playerLookup, adjacent, usagePanels, teamRecords] =
+    await Promise.all([
     supabase
       .from("newsletter_sections")
       .select("*, newsletter_teams(slug, name, abbrev)")
@@ -75,6 +82,7 @@ export default async function IssuePage({ params, searchParams }: Props) {
       includeDrafts: Boolean(viewer?.isAdmin),
     }),
     panelsPromise,
+    recordsPromise,
   ]);
 
   const playerEntries = entriesMentionedIn(
@@ -106,6 +114,7 @@ export default async function IssuePage({ params, searchParams }: Props) {
       adjacentPrev={adjacent.prev}
       adjacentNext={adjacent.next}
       usagePanels={usagePanels}
+      teamRecords={teamRecords}
       isAdmin={Boolean(viewer?.isAdmin)}
     />
   );

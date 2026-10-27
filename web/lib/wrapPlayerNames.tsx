@@ -239,8 +239,11 @@ function matchNameLengthAt(
     }
     const tok = TOKEN_RE.exec(text.slice(pos))?.[0];
     if (!tok) return null;
-    if (tokenKey(tok) !== tokenKey(nameTokens[t])) return null;
-    pos += tok.length;
+    // Possessive "Gardner-Johnson's" still matches "Gardner-Johnson"; leave 's
+    // outside the chip. Do not strip trailing periods here or "C.J." breaks.
+    const core = tok.replace(/['’]s$/, "");
+    if (tokenKey(core) !== tokenKey(nameTokens[t])) return null;
+    pos += core.length;
   }
   if (!hasBoundaryAfter(text, pos)) return null;
   return pos - i;

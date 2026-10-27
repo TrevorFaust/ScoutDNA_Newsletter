@@ -48,6 +48,8 @@ type Props = {
   adjacentNext?: AdjacentIssue | null;
   /** Usage panel keyed by team abbrev (LAR/ARI/WAS). Weekly REG only. */
   usagePanels?: Record<string, import("@/lib/playerUsage").TeamUsagePanelData>;
+  /** Standings through this issue's week; jump nav only. Body order is unchanged. */
+  teamRecords?: Record<string, import("@/lib/teamGames").TeamRecord>;
   isAdmin?: boolean;
 };
 
@@ -65,6 +67,7 @@ export function IssueView({
   adjacentPrev = null,
   adjacentNext = null,
   usagePanels,
+  teamRecords,
   isAdmin = false,
 }: Props) {
   const hasContent = sections.some(
@@ -163,7 +166,7 @@ export function IssueView({
         </div>
       )}
 
-      <TeamJumpNav />
+      <TeamJumpNav records={teamRecords} />
 
       {Object.entries(divisions).map(([divName, teams]) => (
         <div key={divName}>

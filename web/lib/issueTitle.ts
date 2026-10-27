@@ -94,12 +94,17 @@ export function displayIssueTitle(issue: IssueTitleInput): string {
   const iso = dateIso(issue);
   const weekly =
     issue.issue_type === "weekly" || /week/i.test(issue.title || "");
+  const stripped = stripBrandTitle(issue.title);
+  const generic = !stripped || /^week\s+\d+\s+recap$/i.test(stripped);
   if (weekly && iso) {
+    // Custom edition titles (e.g. "And Then There Was One") win over the
+    // generic Week N Recap fallback. The edition badge still carries the week.
+    if (!generic) return stripped;
     const n = nflWeekNumber(iso);
     if (n) return `Week ${n} Recap`;
     return recapLabel(iso);
   }
-  return stripBrandTitle(issue.title) || issue.title;
+  return stripped || issue.title;
 }
 
 export function issueStorylines(issue: IssueTitleInput): string[] {
