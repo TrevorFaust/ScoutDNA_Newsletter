@@ -11,6 +11,7 @@ from .storage import (
     fetch_team_id_map,
     log_pipeline_run,
     mark_issue_collected,
+    prune_old_raw_items,
     upsert_raw_items,
 )
 from .teams import load_teams
@@ -55,6 +56,10 @@ def main() -> None:
         teams = match
         os.environ.setdefault("REDDIT_RSS_SKIP_NFL", "1")
         print(f"Collecting Reddit/RSS for {match[0].name} only (r/nfl skipped)")
+    removed = prune_old_raw_items()
+    if removed:
+        print(f"Pruned {removed} raw items older than the retention window")
+
     slug_to_id = fetch_team_id_map()
     if not slug_to_id:
         print("No teams in DB — run Supabase migrations + seed first.")

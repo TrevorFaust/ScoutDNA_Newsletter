@@ -1,8 +1,25 @@
 from datetime import date, datetime, timedelta
 
+from .config import TZ
 from .db import get_client
 from .tables import ISSUES, PIPELINE_RUNS, RAW_ITEMS, SECTIONS, TEAMS
 from .teams import Team
+
+# Article bodies are the bulk of the shared NFL database. Keep a season window
+# so DraftDNA and ScoutDNA stay under the free-tier size limit.
+RAW_ITEM_KEEP_DAYS = 45
+
+
+def prune_old_raw_items(keep_days: int = RAW_ITEM_KEEP_DAYS) -> int:
+    cutoff = (datetime.now(TZ).date() - timedelta(days=keep_days)).isoformat()
+    sb = get_client()
+    removed = 0
+    while True:
+        resp = sb.table(RAW_ITEMS).delete().lt("content_date", cutoff).execute()
+        batch = len(resp.data or [])
+        removed += batch
+        if batch < 1000:
+            return removed
 
 
 def fetch_team_id_map() -> dict[str, str]:
